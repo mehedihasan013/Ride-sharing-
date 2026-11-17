@@ -1,112 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'screens/otp_login_screen.dart';
+import 'screens/passenger_home_screen.dart';
+import 'services/passenger_api_service.dart';
+import 'services/passenger_socket_service.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const CholoBhairabPassengerApp());
 }
 
+/// Root widget for the CholoBhairab (চলো ভৈরব) Passenger Application.
+/// Wires `MultiProvider` for `PassengerApiService` and `PassengerSocketService`,
+/// applies the Bangladesh Emerald (`#006A4E`) & Deep Command Slate (`#0B131E`) theme,
+/// and launches into the OTP Login & Home flow.
 class CholoBhairabPassengerApp extends StatelessWidget {
   const CholoBhairabPassengerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'চলো ভৈরব - যাত্রী',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF006A4E), // Bangladesh Bottle Green
-          primary: const Color(0xFF006A4E),
-          secondary: const Color(0xFFF42A41), // Bangladesh Red
+    final apiService = PassengerApiService();
+
+    return MultiProvider(
+      providers: [
+        Provider<PassengerApiService>.value(value: apiService),
+        ChangeNotifierProvider<PassengerSocketService>(
+          create: (_) => PassengerSocketService(apiService: apiService),
         ),
-        useMaterial3: true,
-        fontFamily: 'Hind Siliguri',
-      ),
-      home: const PassengerHomeScreen(),
-    );
-  }
-}
-
-class PassengerHomeScreen extends StatefulWidget {
-  const PassengerHomeScreen({super.key});
-
-  @override
-  State<PassengerHomeScreen> createState() => _PassengerHomeScreenState();
-}
-
-class _PassengerHomeScreenState extends State<PassengerHomeScreen> {
-  String selectedVehicle = 'EASYBIKE';
-  int offerFare = 60;
-  String pickup = 'ভৈরব বাজার রেলওয়ে জংশন';
-  String dropoff = 'সৈয়দ নজরুল ইসলাম সেতু (মেঘনা ব্রিজ)';
-  bool isSearching = false;
-  List<Map<String, dynamic>> driverBids = [];
-
-  final List<Map<String, String>> vehicles = [
-    {'type': 'EASYBIKE', 'name': 'ইজিবাইক (টমটম)', 'icon': '🛺', 'base': '50'},
-    {'type': 'BIKE', 'name': 'বাইক', 'icon': '🏍️', 'base': '70'},
-    {'type': 'CNG', 'name': 'সিএনজি', 'icon': '🛺', 'base': '90'},
-    {'type': 'CAR_MICROBUS', 'name': 'ঢাকা মাইক্রোবাস', 'icon': '🚐', 'base': '300'},
-  ];
-
-  void _requestRide() {
-    setState(() {
-      isSearching = true;
-      driverBids.clear();
-    });
-
-    // Simulate incoming real-time bids over WebSocket
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          driverBids.add({
-            'driverName': 'মোঃ রফিকুল ইসলাম',
-            'vehicle': 'ভৈরব ইজিবাইক #১২',
-            'rating': '4.9 ★',
-            'bid': offerFare,
-            'eta': '২ মিনিট',
-          });
-        });
-      }
-    });
-
-    Future.delayed(const Duration(seconds: 4), () {
-      if (mounted) {
-        setState(() {
-          driverBids.add({
-            'driverName': 'কামাল হোসেন',
-            'vehicle': 'ভৈরব ইজিবাইক #৪৫',
-            'rating': '4.8 ★',
-            'bid': offerFare + 10,
-            'eta': '১ মিনিট',
-          });
-        });
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('চলো ভৈরব (যাত্রী)'),
-        backgroundColor: const Color(0xFF006A4E),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.emergency, color: Colors.amberAccent),
-            tooltip: 'জরুরী ৯৯৯ ও এসওএস',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('জরুরী যোগাযোগ: ৯৯৯ এবং আত্মীয়দের সাথে লাইভ ট্র্যাকিং শেয়ার হয়েছে')),
-              );
-            },
+      ],
+      child: MaterialApp(
+        title: 'চলো ভৈরব (CholoBhairab) — যাত্রী অ্যাপ',
+        debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.dark,
+        theme: ThemeData(
+          useMaterial3: true,
+          brightness: Brightness.dark,
+          scaffoldBackgroundColor: const Color(0xFF0B131E),
+          colorScheme: ColorScheme.fromSeed(
+            brightness: Brightness.dark,
+            seedColor: const Color(0xFF006A4E),
+            primary: const Color(0xFF006A4E),
+            secondary: const Color(0xFFF59E0B),
+            error: const Color(0xFFF42A41),
+            surface: const Color(0xFF111C2D),
           ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          textTheme: GoogleFonts.hindSiliguriTextTheme(
+            ThemeData.dark().textTheme,
+          ),
         ),
+        initialRoute: '/login',
+        routes: {
+          '/login': (_) => const OtpLoginScreen(),
+          '/home': (_) => const PassengerHomeScreen(),
+        },
       ),
     );
   }

@@ -33,7 +33,7 @@ export class AdminController {
     body: {
       driverId: string;
       amountBdt: number;
-      method?: 'BKASH' | 'NAGAD';
+      method?: 'BKASH' | 'NAGAD' | 'ADMIN_MANUAL';
       trxId?: string;
     },
   ) {
@@ -51,5 +51,10 @@ export class AdminController {
     @Body() body?: { resolved?: boolean },
   ) {
     return this.adminService.triggerSos(rideId, body?.resolved);
+  }
+
+  @Post('reset-seed')
+  resetSeed() {
+    return this.adminService.resetSeedState();
   }
 }

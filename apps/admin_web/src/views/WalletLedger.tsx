@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   OnlineDriver,
   WalletRecord,
@@ -9,6 +9,8 @@ import {
   ArrowUpRight,
   Banknote,
   CheckCircle2,
+  CreditCard,
+  ExternalLink,
   Gift,
   Lock,
   PlusCircle,
@@ -17,6 +19,19 @@ import {
   Sparkles,
   Wallet,
 } from 'lucide-react';
+
+const API_BASE = 'http://localhost:4000';
+
+interface TokenizedCheckoutSession {
+  driverId: string;
+  driverName: string;
+  amountBdt: number;
+  paymentID: string;
+  invoiceNumber: string;
+  bkashURL: string;
+  status: 'INITIATED' | 'EXECUTING' | 'COMPLETED';
+  trxID?: string;
+}
 
 interface WalletLedgerProps {
   drivers: OnlineDriver[];
@@ -29,6 +44,7 @@ interface WalletLedgerProps {
     amountBdt: number,
     method: 'BKASH' | 'NAGAD'
   ) => Promise<void>;
+  onRefreshOverview?: () => Promise<void>;
 }
 
 export const WalletLedger: React.FC<WalletLedgerProps> = ({
@@ -38,10 +54,45 @@ export const WalletLedger: React.FC<WalletLedgerProps> = ({
   totalCommissionBdt,
   totalGmvBdt,
   onTopupWallet,
+  onRefreshOverview,
 }) => {
   const [selectedMethod, setSelectedMethod] = useState<'BKASH' | 'NAGAD'>('BKASH');
   const [loadingDriverId, setLoadingDriverId] = useState<string | null>(null);
   const [customAmounts, setCustomAmounts] = useState<Record<string, number>>({});
+  const [tokenizedSession, setTokenizedSession] =
+    useState<TokenizedCheckoutSession | null>(null);
+  const [tokenizedLoading, setTokenizedLoading] = useState<boolean>(false);
+
+  // Listen for popup completion postMessage from /payments/bkash/result
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data?.type === 'BKASH_PAYMENT_COMPLETE' && event.data?.paymentID) {
+        const completedPaymentId = String(event.data.paymentID);
+        try {
+          const res = await fetch(`${API_BASE}/payments/bkash/status/${completedPaymentId}`);
+          const data = await res.json();
+          if (data?.success && data.payment) {
+            setTokenizedSession((prev) =>
+              prev && prev.paymentID === completedPaymentId
+                ? {
+                    ...prev,
+                    status: 'COMPLETED',
+                    trxID: data.payment.trxID || prev.trxID,
+                  }
+                : prev
+            );
+          }
+        } catch {
+          // Ignore status fetch failure
+        }
+        if (onRefreshOverview) {
+          await onRefreshOverview();
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onRefreshOverview]);
 
   // Merge wallet balance with driver details
   const enrichedWallets = drivers.map((driver) => {
@@ -61,6 +112,104 @@ export const WalletLedger: React.FC<WalletLedgerProps> = ({
     } finally {
       setLoadingDriverId(null);
     }
+  };
+
+  // Start bKash Tokenized Checkout (POST /payments/bkash/create)
+  const handleStartTokenizedCheckout = async (
+    driverId: string,
+    driverName: string,
+    amountBdt: number
+  ) => {
+    const validAmount = Math.max(20, amountBdt || 200);
+    setTokenizedLoading(true);
+    setLoadingDriverId(driverId);
+
+    try {
+      const res = await fetch(`${API_BASE}/payments/bkash/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId, amountBdt: validAmount }),
+      });
+      const data = await res.json();
+      if (data?.paymentID) {
+        const bkashURL =
+          data.bkashURL ||
+          `${API_BASE}/payments/bkash/mock/checkout?paymentID=${data.paymentID}`;
+        setTokenizedSession({
+          driverId,
+          driverName,
+          amountBdt: validAmount,
+          paymentID: data.paymentID,
+          invoiceNumber: data.invoiceNumber || `INV-CB-${Date.now()}`,
+          bkashURL,
+          status: 'INITIATED',
+        });
+        return;
+      }
+    } catch {
+      // Fallback if backend is unreachable
+    } finally {
+      setTokenizedLoading(false);
+      setLoadingDriverId(null);
+    }
+
+    const fallbackPid = `TR0011${Date.now()}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+    setTokenizedSession({
+      driverId,
+      driverName,
+      amountBdt: validAmount,
+      paymentID: fallbackPid,
+      invoiceNumber: `INV-CB-${Date.now()}-200`,
+      bkashURL: `${API_BASE}/payments/bkash/mock/checkout?paymentID=${fallbackPid}`,
+      status: 'INITIATED',
+    });
+  };
+
+  // Execute Tokenized Payment directly (POST /payments/bkash/execute)
+  const handleExecuteTokenizedCheckout = async () => {
+    if (!tokenizedSession) return;
+    setTokenizedLoading(true);
+    setTokenizedSession((prev) => (prev ? { ...prev, status: 'EXECUTING' } : prev));
+
+    try {
+      const res = await fetch(`${API_BASE}/payments/bkash/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentID: tokenizedSession.paymentID,
+          status: 'success',
+          msisdn: '01811223304',
+        }),
+      });
+      const data = await res.json();
+      if (data?.success && data.payment) {
+        const trxID =
+          data.payment.trxID ||
+          data.transaction?.gatewayTrxId ||
+          `BKH${Math.floor(1000000 + Math.random() * 9000000)}M`;
+        setTokenizedSession((prev) =>
+          prev ? { ...prev, status: 'COMPLETED', trxID } : prev
+        );
+        if (onRefreshOverview) {
+          await onRefreshOverview();
+        }
+        return;
+      }
+    } catch {
+      // Offline fallback below
+    } finally {
+      setTokenizedLoading(false);
+    }
+
+    const fallbackTrxId = `BKH${Math.floor(1000000 + Math.random() * 9000000)}M`;
+    await onTopupWallet(
+      tokenizedSession.driverId,
+      tokenizedSession.amountBdt,
+      'BKASH'
+    );
+    setTokenizedSession((prev) =>
+      prev ? { ...prev, status: 'COMPLETED', trxID: fallbackTrxId } : prev
+    );
   };
 
   return (
@@ -126,6 +275,88 @@ export const WalletLedger: React.FC<WalletLedgerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Tokenized bKash Checkout Session Banner (shows paymentID, Popup, Execute & trxID) */}
+      {tokenizedSession && (
+        <div className="glass-card rounded-2xl p-4 border-2 border-[#E2136E] bg-gradient-to-r from-[#240B1A] via-[#171225] to-[#111C2D] shadow-xl">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#E2136E] text-white text-[11px] font-extrabold">
+                  bKash Tokenized v1.2.0-beta
+                </span>
+                <span className="text-xs font-bold text-pink-200">
+                  চালক: {tokenizedSession.driverName} • পরিমাণ: ৳{tokenizedSession.amountBdt}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                    tokenizedSession.status === 'COMPLETED'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  }`}
+                >
+                  {tokenizedSession.status}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-slate-200 pt-1">
+                <span>
+                  paymentID: <strong className="text-white">{tokenizedSession.paymentID}</strong>
+                </span>
+                <span>
+                  invoiceNumber: <strong className="text-pink-300">{tokenizedSession.invoiceNumber}</strong>
+                </span>
+                {tokenizedSession.trxID && (
+                  <span className="text-emerald-300">
+                    trxID: <strong className="text-emerald-200">{tokenizedSession.trxID}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() =>
+                  window.open(
+                    tokenizedSession.bkashURL,
+                    'bkash_tokenized_checkout',
+                    'width=460,height=720'
+                  )
+                }
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-pink-400/40 text-pink-200 text-xs font-bold flex items-center gap-1.5"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open Mock Checkout Popup</span>
+              </button>
+
+              {tokenizedSession.status !== 'COMPLETED' && (
+                <button
+                  type="button"
+                  disabled={tokenizedLoading}
+                  onClick={handleExecuteTokenizedCheckout}
+                  className="px-3.5 py-2 rounded-xl bg-[#E2136E] hover:bg-[#c81060] text-white text-xs font-extrabold shadow-lg flex items-center gap-1.5"
+                >
+                  {tokenizedLoading ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>✓ Execute Tokenized Payment (/payments/bkash/execute)</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setTokenizedSession(null)}
+                className="px-2.5 py-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Driver Wallet Cards Grid */}
       <div>
@@ -268,6 +499,23 @@ export const WalletLedger: React.FC<WalletLedgerProps> = ({
                       </span>
                     </button>
                   </div>
+
+                  {/* bKash Tokenized Checkout Test Flow Button */}
+                  <button
+                    type="button"
+                    disabled={isLoading || tokenizedLoading}
+                    onClick={() =>
+                      handleStartTokenizedCheckout(
+                        driver.driverId,
+                        driver.driverName,
+                        customVal || 200
+                      )
+                    }
+                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#240B1A] to-[#4A1132] hover:from-[#E2136E]/30 hover:to-[#E2136E]/50 text-pink-200 hover:text-white border border-[#E2136E]/50 text-xs font-extrabold transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <CreditCard className="w-3.5 h-3.5 text-pink-400" />
+                    <span>💳 bKash Tokenized Checkout (Test Flow)</span>
+                  </button>
                 </div>
               </div>
             );

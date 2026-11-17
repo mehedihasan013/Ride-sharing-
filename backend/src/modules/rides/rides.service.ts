@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { GeoService } from '../geo/geo.service';
 import { WalletService } from '../wallet/wallet.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 export interface ActiveRide {
   id: string;
@@ -25,7 +26,14 @@ export interface ActiveRide {
   sosActive?: boolean;
   sosTriggeredAt?: number;
   sosResolvedAt?: number;
-  status: 'SEARCHING' | 'BIDDING' | 'ACCEPTED' | 'ARRIVING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  status:
+    | 'SEARCHING'
+    | 'BIDDING'
+    | 'ACCEPTED'
+    | 'ARRIVING'
+    | 'IN_PROGRESS'
+    | 'COMPLETED'
+    | 'CANCELLED';
   bids: ActiveBid[];
   createdAt: number;
   liveTrackingToken: string;
@@ -62,18 +70,67 @@ export interface OnlineDriver {
 export class RidesService {
   private readonly logger = new Logger(RidesService.name);
 
-  // In-memory active state stores (backed by Redis in production cluster)
+  // Active state stores backed by PrismaService durable store + Supabase PostgreSQL
   private activeRides = new Map<string, ActiveRide>();
   private onlineDrivers = new Map<string, OnlineDriver>();
 
   constructor(
     private readonly geoService: GeoService,
     private readonly walletService: WalletService,
+    private readonly prismaService: PrismaService,
   ) {
-    this.seedBhairabFleetAndRides();
+    this.loadOrSeedFleetAndRides();
+    this.prismaService.registerResetListener(() => {
+      this.seedBhairabFleetAndRides();
+      this.persistToStore();
+    });
   }
 
-  private seedBhairabFleetAndRides() {
+  private loadOrSeedFleetAndRides() {
+    const storedRides = this.prismaService.getRides();
+    const storedDrivers = this.prismaService.getOnlineDrivers();
+
+    // Always seed initial fleet first so all 6 Bhairab drivers are online, then overlay stored drivers
+    this.seedBhairabFleetDriversOnly();
+    if (Array.isArray(storedDrivers) && storedDrivers.length > 0) {
+      for (const d of storedDrivers) {
+        this.onlineDrivers.set(d.driverId, {
+          ...d,
+          walletBalance: this.walletService.getWallet(d.driverId).currentBalance,
+        });
+      }
+    }
+    // Sync all online drivers with live WalletService balances
+    for (const d of this.onlineDrivers.values()) {
+      d.walletBalance = this.walletService.getWallet(d.driverId).currentBalance;
+    }
+
+    if (Array.isArray(storedRides) && storedRides.length > 0) {
+      this.activeRides.clear();
+      for (const r of storedRides) {
+        this.activeRides.set(r.id, {
+          ...r,
+          bids: Array.isArray(r.bids) ? r.bids : [],
+        });
+      }
+      this.logger.log(
+        `Restored ${this.activeRides.size} rides and ${this.onlineDrivers.size} online drivers from durable state`,
+      );
+    } else {
+      this.seedBhairabRidesOnly();
+      this.persistToStore();
+    }
+  }
+
+  private persistToStore() {
+    this.prismaService.saveRidesAndDrivers(
+      Array.from(this.activeRides.values()),
+      Array.from(this.onlineDrivers.values()),
+    );
+  }
+
+  private seedBhairabFleetDriversOnly() {
+    this.onlineDrivers.clear();
     const initialFleet: OnlineDriver[] = [
       {
         driverId: 'driver_demo_1',
@@ -81,7 +138,7 @@ export class RidesService {
         vehicleType: 'EASYBIKE',
         lat: 24.0487,
         lng: 90.9852,
-        walletBalance: 193.0,
+        walletBalance: this.walletService.getWallet('driver_demo_1').currentBalance,
         rating: 4.9,
         driverName: 'মোঃ রফিকুল ইসলাম',
         driverPhone: '01811223301',
@@ -94,7 +151,7 @@ export class RidesService {
         vehicleType: 'CNG',
         lat: 24.0418,
         lng: 91.0022,
-        walletBalance: 340.0,
+        walletBalance: this.walletService.getWallet('driver_demo_2').currentBalance,
         rating: 4.8,
         driverName: 'কামাল হোসেন',
         driverPhone: '01711223302',
@@ -107,7 +164,7 @@ export class RidesService {
         vehicleType: 'BIKE',
         lat: 24.0535,
         lng: 90.9811,
-        walletBalance: 125.0,
+        walletBalance: this.walletService.getWallet('driver_demo_3').currentBalance,
         rating: 4.9,
         driverName: 'জাহিদ হাসান',
         driverPhone: '01911223303',
@@ -120,7 +177,7 @@ export class RidesService {
         vehicleType: 'EASYBIKE',
         lat: 24.0425,
         lng: 90.9840,
-        walletBalance: 35.0, // Low balance < 50 BDT lockout demo
+        walletBalance: this.walletService.getWallet('driver_demo_4').currentBalance,
         rating: 4.6,
         driverName: 'আনোয়ার মিয়া',
         driverPhone: '01611223304',
@@ -133,7 +190,7 @@ export class RidesService {
         vehicleType: 'CAR_MICROBUS',
         lat: 24.0620,
         lng: 90.9785,
-        walletBalance: 850.0,
+        walletBalance: this.walletService.getWallet('driver_demo_5').currentBalance,
         rating: 5.0,
         driverName: 'সোহেল রানা',
         driverPhone: '01711223305',
@@ -146,7 +203,7 @@ export class RidesService {
         vehicleType: 'CNG',
         lat: 24.0750,
         lng: 90.9650,
-        walletBalance: 210.0,
+        walletBalance: this.walletService.getWallet('driver_demo_6').currentBalance,
         rating: 4.7,
         driverName: 'শফিকুল আলম',
         driverPhone: '01811223306',
@@ -158,7 +215,10 @@ export class RidesService {
     for (const driver of initialFleet) {
       this.onlineDrivers.set(driver.driverId, driver);
     }
+  }
 
+  private seedBhairabRidesOnly() {
+    this.activeRides.clear();
     const now = Date.now();
 
     // Seed 1 Completed Ride for historical GMV & Commission stats
@@ -252,13 +312,24 @@ export class RidesService {
     this.activeRides.set(activeBiddingRide.id, activeBiddingRide);
   }
 
+  seedBhairabFleetAndRides() {
+    this.seedBhairabFleetDriversOnly();
+    this.seedBhairabRidesOnly();
+  }
+
   registerOnlineDriver(driver: OnlineDriver) {
+    const liveBalance = this.walletService.getWallet(driver.driverId).currentBalance;
+    driver.walletBalance = liveBalance;
     this.onlineDrivers.set(driver.driverId, driver);
-    this.logger.log(`Driver ${driver.driverId} online (${driver.vehicleType}) at [${driver.lat}, ${driver.lng}]`);
+    this.persistToStore();
+    this.logger.log(
+      `Driver ${driver.driverId} online (${driver.vehicleType}) at [${driver.lat}, ${driver.lng}]`,
+    );
   }
 
   removeOnlineDriver(driverId: string) {
     this.onlineDrivers.delete(driverId);
+    this.persistToStore();
   }
 
   updateDriverLocation(driverId: string, lat: number, lng: number) {
@@ -266,10 +337,14 @@ export class RidesService {
     if (driver) {
       driver.lat = lat;
       driver.lng = lng;
+      this.persistToStore();
     }
   }
 
   getAllOnlineDrivers(): OnlineDriver[] {
+    for (const d of this.onlineDrivers.values()) {
+      d.walletBalance = this.walletService.getWallet(d.driverId).currentBalance;
+    }
     return Array.from(this.onlineDrivers.values());
   }
 
@@ -281,6 +356,7 @@ export class RidesService {
     const driver = this.onlineDrivers.get(driverId);
     if (driver) {
       driver.walletBalance = Number(newBalance.toFixed(2));
+      this.persistToStore();
     }
   }
 
@@ -329,8 +405,6 @@ export class RidesService {
       ride.sosActive = true;
       ride.sosTriggeredAt = Date.now();
     } else {
-      // If called on /admin/rides/demo/sos without explicit resolved flag, activate SOS;
-      // otherwise toggle SOS state
       if (rideId === 'demo') {
         ride.sosActive = true;
         ride.sosTriggeredAt = Date.now();
@@ -344,12 +418,25 @@ export class RidesService {
       }
     }
 
+    this.prismaService.recordSosEvent({
+      id: `sos_${Date.now()}`,
+      rideId: ride.id,
+      triggeredBy: ride.passengerId,
+      resolved: !ride.sosActive,
+      createdAt: new Date().toISOString(),
+      resolvedAt: !ride.sosActive ? new Date().toISOString() : undefined,
+    });
+    this.persistToStore();
+
     return ride;
   }
 
   getNearbyDriversForRide(ride: ActiveRide, radiusKm = 4.0): OnlineDriver[] {
     const eligible: OnlineDriver[] = [];
     for (const driver of this.onlineDrivers.values()) {
+      // Sync live wallet balance
+      driver.walletBalance = this.walletService.getWallet(driver.driverId).currentBalance;
+
       // Must match vehicle type
       if (driver.vehicleType !== ride.vehicleType) continue;
 
@@ -398,6 +485,7 @@ export class RidesService {
     };
 
     this.activeRides.set(rideId, ride);
+    this.persistToStore();
     return ride;
   }
 
@@ -417,8 +505,14 @@ export class RidesService {
     const driver = this.onlineDrivers.get(data.driverId);
     if (!driver) throw new BadRequestException('Driver is not currently registered online');
 
-    if (driver.walletBalance < 50) {
-      throw new BadRequestException('কম ব্যালেন্স! বিড করতে নূন্যতম ৫০ টাকা ওয়ালেট ব্যালেন্স প্রয়োজন');
+    // Always check live wallet balance from WalletService and sync driver.walletBalance
+    const liveWalletBalance = this.walletService.getWallet(data.driverId).currentBalance;
+    driver.walletBalance = liveWalletBalance;
+
+    if (liveWalletBalance < 50) {
+      throw new BadRequestException(
+        'কম ব্যালেন্স! বিড করতে নূন্যতম ৫০ টাকা ওয়ালেট ব্যালেন্স প্রয়োজন',
+      );
     }
 
     ride.status = 'BIDDING';
@@ -440,6 +534,7 @@ export class RidesService {
     ride.bids = ride.bids.filter((b) => b.driverId !== data.driverId);
     ride.bids.push(bid);
 
+    this.persistToStore();
     return bid;
   }
 
@@ -457,6 +552,7 @@ export class RidesService {
     ride.selectedVehicleModel = bid.vehicleModel;
     ride.finalAgreedFare = bid.bidAmount;
 
+    this.persistToStore();
     return { ride, acceptedBid: bid };
   }
 
@@ -480,6 +576,7 @@ export class RidesService {
       this.syncDriverWalletBalance(ride.selectedDriverId, tx.balanceAfter);
     }
 
+    this.persistToStore();
     return { ride, commissionDeducted };
   }
 

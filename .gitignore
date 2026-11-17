@@ -20,3 +20,6 @@ build/
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# Runtime durable state snapshots
+backend/data/*.json

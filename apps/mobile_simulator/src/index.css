@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Inter', 'Hind Siliguri', system-ui, sans-serif;
+    background-color: #070D15;
+    color: #F8FAFC;
+  }
+}
+
+.font-bangla {
+  font-family: 'Hind Siliguri', 'Inter', sans-serif;
+}
+
+/* Custom sleek scrollbars inside phone viewports */
+.phone-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.phone-scroll::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.phone-scroll::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 9999px;
+}
+
+.phone-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.6);
+}
+
+/* Leaflet map container overrides for mobile simulator */
+.leaflet-container {
+  background-color: #0B131E !important;
+  font-family: 'Hind Siliguri', 'Inter', sans-serif !important;
+}
+
+.leaflet-control-attribution {
+  display: none !important;
+}

@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -53,154 +54,260 @@ enum PaymentMethod {
 }
 
 enum TransactionType {
+  PROMOTIONAL_BONUS
+  BONUS
   BKASH_TOPUP
   NAGAD_TOPUP
   COMMISSION_DEDUCTION
-  BONUS
   PENALTY
+}
+
+enum BkashPaymentStatus {
+  INITIATED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum BkashMode {
+  MOCK
+  SANDBOX
 }
 
 model User {
   id               String    @id @default(uuid())
-  phoneNumber      String    @unique
-  fullName         String
+  phoneNumber      String    @unique @map("phone_number")
+  fullName         String    @map("full_name")
   role             Role      @default(PASSENGER)
-  emergencyContact String?
-  profilePhotoUrl  String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  emergencyContact String?   @map("emergency_contact")
+  profilePhotoUrl  String?   @map("profile_photo_url")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   driverProfile    Driver?
   ridesAsPassenger Ride[]    @relation("PassengerRides")
+
+  @@index([role], map: "idx_users_role")
+  @@map("users")
 }
 
 model Driver {
   id                    String        @id @default(uuid())
-  userId                String        @unique
+  userId                String        @unique @map("user_id")
   user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   // KYC & Onboarding
-  nidNumber             String        @unique
-  nidFrontUrl           String?
-  nidBackUrl            String?
-  brtaLicenseNo         String?       // Required for BIKE and CAR
-  unionCouncilorCertUrl String?       // Valid for EASYBIKE & CNG in Bhairab
+  nidNumber             String        @unique @map("nid_number")
+  nidFrontUrl           String?       @map("nid_front_url")
+  nidBackUrl            String?       @map("nid_back_url")
+  brtaLicenseNo         String?       @map("brta_license_no")
+  unionCouncilorCertUrl String?       @map("union_councilor_cert_url")
   status                DriverStatus  @default(PENDING_VERIFICATION)
-  ratingAvg             Float         @default(5.0)
-  totalTrips            Int           @default(0)
+  ratingAvg             Float         @default(5.0) @map("rating_avg")
+  totalTrips            Int           @default(0) @map("total_trips")
 
   // Real-time location
-  currentLat            Float?
-  currentLng            Float?
-  lastLocationUpdate    DateTime?
+  currentLat            Float?        @map("current_lat")
+  currentLng            Float?        @map("current_lng")
+  lastLocationUpdate    DateTime?     @map("last_location_update")
 
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
 
   vehicle               Vehicle?
+  kycApplication        DriverKycApplication?
   wallet                DriverWallet?
+  bkashPayments         BkashPayment[]
   ridesAsDriver         Ride[]        @relation("DriverRides")
   bids                  RideBid[]
+
+  @@index([status], map: "idx_drivers_status")
+  @@index([currentLat, currentLng], map: "idx_drivers_location")
+  @@map("drivers")
 }
 
 model Vehicle {
   id                 String      @id @default(uuid())
-  driverId           String      @unique
+  driverId           String      @unique @map("driver_id")
   driver             Driver      @relation(fields: [driverId], references: [id], onDelete: Cascade)
   type               VehicleType
-  registrationNumber String?     // Optional for Easy-Bikes (Tomtoms)
-  modelName          String
+  registrationNumber String?     @map("registration_number")
+  modelName          String      @map("model_name")
   color              String
   capacity           Int         @default(1)
-  vehiclePhotoUrl    String?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  vehiclePhotoUrl    String?     @map("vehicle_photo_url")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  @@index([type], map: "idx_vehicles_type")
+  @@map("vehicles")
+}
+
+model DriverKycApplication {
+  id                 String       @id @default(uuid())
+  driverId           String       @unique @map("driver_id")
+  driver             Driver       @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  fullName           String       @map("full_name")
+  phoneNumber        String       @map("phone_number")
+  nidNumber          String       @map("nid_number")
+  vehicleType        VehicleType  @map("vehicle_type")
+  vehicleModel       String       @map("vehicle_model")
+  registrationNumber String       @map("registration_number")
+  brtaLicenseNo      String       @map("brta_license_no")
+  unionCouncilorCert String       @map("union_councilor_cert")
+  wardNo             String       @map("ward_no")
+  status             DriverStatus @default(PENDING_VERIFICATION)
+  note               String?
+  submittedAt        DateTime     @default(now()) @map("submitted_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  @@index([status], map: "idx_driver_kyc_status")
+  @@index([vehicleType], map: "idx_driver_kyc_vehicle_type")
+  @@map("driver_kyc_applications")
 }
 
 model DriverWallet {
   id             String              @id @default(uuid())
-  driverId       String              @unique
+  driverId       String              @unique @map("driver_id")
   driver         Driver              @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  currentBalance Decimal             @default(0.0) @db.Decimal(10, 2)
-  lockedBalance  Decimal             @default(0.0) @db.Decimal(10, 2)
-  lastTopupAt    DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  currentBalance Decimal             @default(0.0) @db.Decimal(10, 2) @map("current_balance")
+  lockedBalance  Decimal             @default(0.0) @db.Decimal(10, 2) @map("locked_balance")
+  lastTopupAt    DateTime?           @map("last_topup_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
 
   transactions   WalletTransaction[]
+
+  @@index([currentBalance], map: "idx_driver_wallets_balance")
+  @@map("driver_wallets")
 }
 
 model WalletTransaction {
   id               String          @id @default(uuid())
-  walletId         String
+  walletId         String          @map("wallet_id")
   wallet           DriverWallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  driverId         String?         @map("driver_id")
   type             TransactionType
   amount           Decimal         @db.Decimal(10, 2)
-  balanceAfter     Decimal         @db.Decimal(10, 2)
-  referenceRideId  String?
-  gatewayTrxId     String?
+  balanceAfter     Decimal         @db.Decimal(10, 2) @map("balance_after")
+  referenceRideId  String?         @map("reference_ride_id")
+  gatewayTrxId     String?         @unique @map("gateway_trx_id")
   note             String?
-  createdAt        DateTime        @default(now())
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  @@index([walletId, createdAt], map: "idx_wallet_transactions_wallet_created")
+  @@index([type], map: "idx_wallet_transactions_type")
+  @@index([referenceRideId], map: "idx_wallet_transactions_ride")
+  @@map("wallet_transactions")
+}
+
+model BkashPayment {
+  id             String             @id @default(uuid())
+  paymentId      String             @unique @map("payment_id")
+  driverId       String             @map("driver_id")
+  driver         Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  amountBdt      Decimal            @db.Decimal(10, 2) @map("amount_bdt")
+  invoiceNumber  String             @unique @map("invoice_number")
+  status         BkashPaymentStatus @default(INITIATED)
+  mode           BkashMode          @default(MOCK)
+  payerReference String?            @map("payer_reference")
+  trxId          String?            @unique @map("trx_id")
+  bkashUrl       String?            @map("bkash_url")
+  customerMsisdn String?            @map("customer_msisdn")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  completedAt    DateTime?          @map("completed_at")
+
+  @@index([driverId, createdAt], map: "idx_bkash_payments_driver_created")
+  @@index([status], map: "idx_bkash_payments_status")
+  @@map("bkash_payments")
 }
 
 model Ride {
   id                        String        @id @default(uuid())
-  passengerId               String
+  passengerId               String        @map("passenger_id")
   passenger                 User          @relation("PassengerRides", fields: [passengerId], references: [id])
-  driverId                  String?
+  driverId                  String?       @map("driver_id")
   driver                    Driver?       @relation("DriverRides", fields: [driverId], references: [id])
-  
-  vehicleType               VehicleType
-  pickupLat                 Float
-  pickupLng                 Float
-  pickupAddress             String
-  dropoffLat                Float
-  dropoffLng                Float
-  dropoffAddress            String
-  
-  initialOfferFare          Decimal       @db.Decimal(10, 2)
-  finalAgreedFare           Decimal?      @db.Decimal(10, 2)
-  platformCommissionPercent Decimal       @default(8.0) @db.Decimal(5, 2)
-  platformCommissionAmount  Decimal?      @db.Decimal(10, 2)
+
+  vehicleType               VehicleType   @map("vehicle_type")
+  pickupLat                 Float         @map("pickup_lat")
+  pickupLng                 Float         @map("pickup_lng")
+  pickupAddress             String        @map("pickup_address")
+  dropoffLat                Float         @map("dropoff_lat")
+  dropoffLng                Float         @map("dropoff_lng")
+  dropoffAddress            String        @map("dropoff_address")
+
+  initialOfferFare          Decimal       @db.Decimal(10, 2) @map("initial_offer_fare")
+  finalAgreedFare           Decimal?      @db.Decimal(10, 2) @map("final_agreed_fare")
+  platformCommissionPercent Decimal       @default(8.0) @db.Decimal(5, 2) @map("platform_commission_percent")
+  platformCommissionAmount  Decimal?      @db.Decimal(10, 2) @map("platform_commission_amount")
+  audioPromptBangla         String?       @map("audio_prompt_bangla")
 
   status                    RideStatus    @default(SEARCHING)
-  paymentMethod             PaymentMethod @default(CASH)
-  isCashCollected           Boolean       @default(false)
-  
+  paymentMethod             PaymentMethod @default(CASH) @map("payment_method")
+  isCashCollected           Boolean       @default(false) @map("is_cash_collected")
+
   // Safety & Live Tracking
-  liveTrackingToken         String        @unique @default(uuid())
-  isSosTriggered            Boolean       @default(false)
+  liveTrackingToken         String        @unique @default(uuid()) @map("live_tracking_token")
+  isSosTriggered            Boolean       @default(false) @map("is_sos_triggered")
 
   // Intercity Scheduled Trip fields
-  isIntercity               Boolean       @default(false)
-  scheduledDeparture        DateTime?
-  bookedSeats               Int           @default(1)
+  isIntercity               Boolean       @default(false) @map("is_intercity")
+  scheduledDeparture        DateTime?     @map("scheduled_departure")
+  bookedSeats               Int           @default(1) @map("booked_seats")
 
   bids                      RideBid[]
-  createdAt                 DateTime      @default(now())
-  updatedAt                 DateTime      @updatedAt
+  sosEvents                 SosEvent[]
+  createdAt                 DateTime      @default(now()) @map("created_at")
+  updatedAt                 DateTime      @updatedAt @map("updated_at")
+
+  @@index([status, createdAt], map: "idx_rides_status_created")
+  @@index([passengerId], map: "idx_rides_passenger")
+  @@index([driverId], map: "idx_rides_driver")
+  @@map("rides")
 }
 
 model RideBid {
   id         String    @id @default(uuid())
-  rideId     String
+  rideId     String    @map("ride_id")
   ride       Ride      @relation(fields: [rideId], references: [id], onDelete: Cascade)
-  driverId   String
+  driverId   String    @map("driver_id")
   driver     Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
-  bidAmount  Decimal   @db.Decimal(10, 2)
-  etaMinutes Int       @default(5)
+
+  bidAmount  Decimal   @db.Decimal(10, 2) @map("bid_amount")
+  etaMinutes Int       @default(5) @map("eta_minutes")
   status     BidStatus @default(PENDING)
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([rideId, status], map: "idx_ride_bids_ride_status")
+  @@index([driverId], map: "idx_ride_bids_driver")
+  @@map("ride_bids")
+}
+
+model SosEvent {
+  id          String    @id @default(uuid())
+  rideId      String    @map("ride_id")
+  ride        Ride      @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  triggeredBy String    @default("PASSENGER") @map("triggered_by")
+  resolved    Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  @@index([rideId, resolved], map: "idx_sos_events_ride_resolved")
+  @@map("sos_events")
 }
 
 model BhairabLandmark {
-  id           String      @id @default(uuid())
-  englishName  String
-  banglaName   String
-  category     String      // Transit, Bridge, Commercial, Residential, Healthcare
-  latitude     Float
-  longitude    Float
-  popularModes VehicleType[]
-  createdAt    DateTime    @default(now())
+  id                String        @id @default(uuid())
+  englishName       String        @map("english_name")
+  banglaName        String        @map("bangla_name")
+  category          String
+  latitude          Float
+  longitude         Float
+  descriptionBangla String?       @map("description_bangla")
+  popularModes      VehicleType[] @map("popular_modes")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@index([category], map: "idx_bhairab_landmarks_category")
+  @@map("bhairab_landmarks")
 }

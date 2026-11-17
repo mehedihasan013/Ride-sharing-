@@ -3,6 +3,7 @@ import { RidesService, ActiveRide } from '../rides/rides.service';
 import { RidesGateway } from '../rides/rides.gateway';
 import { WalletService } from '../wallet/wallet.service';
 import { BHAIRAB_LANDMARKS } from '../geo/bhairab-landmarks';
+import { PrismaService } from '../../prisma/prisma.service';
 
 export interface DriverKycRecord {
   id: string;
@@ -31,11 +32,33 @@ export class AdminService {
     private readonly ridesService: RidesService,
     private readonly ridesGateway: RidesGateway,
     private readonly walletService: WalletService,
+    private readonly prismaService: PrismaService,
   ) {
-    this.seedKycApplications();
+    this.loadOrSeedKycApplications();
+    this.prismaService.registerResetListener(() => {
+      this.seedKycApplications();
+      this.persistKycToStore();
+    });
   }
 
-  private seedKycApplications() {
+  private loadOrSeedKycApplications() {
+    const storedKyc = this.prismaService.getKycApplications();
+    if (Array.isArray(storedKyc) && storedKyc.length > 0) {
+      this.kycApplications = storedKyc.map((k: any) => ({ ...k }));
+      this.logger.log(
+        `Restored ${this.kycApplications.length} KYC applications from durable state`,
+      );
+    } else {
+      this.seedKycApplications();
+      this.persistKycToStore();
+    }
+  }
+
+  private persistKycToStore() {
+    this.prismaService.saveKycApplications(this.kycApplications);
+  }
+
+  seedKycApplications() {
     const now = Date.now();
     this.kycApplications = [
       {
@@ -134,6 +157,20 @@ export class AdminService {
     ];
   }
 
+  resetSeedState() {
+    this.prismaService.resetSeedState();
+    this.ridesGateway.broadcastAdminEvent('SEED_RESET', {
+      messageBangla: 'ডাটাবেস প্রাথমিক ভৈরব সিড অবস্থায় রিসেট করা হয়েছে',
+    });
+    return {
+      success: true,
+      messageBangla: 'ডাটাবেস প্রাথমিক ভৈরব সিড অবস্থায় রিসেট করা হয়েছে',
+      wallets: this.walletService.getAllWallets(),
+      kycApplications: this.kycApplications,
+      activeRides: this.ridesService.getAllRides(),
+    };
+  }
+
   getOverview() {
     const onlineDrivers = this.ridesService.getAllOnlineDrivers();
     const allRides = this.ridesService.getAllRides();
@@ -172,6 +209,8 @@ export class AdminService {
 
     return {
       success: true,
+      bkashMode: process.env.BKASH_MODE || 'mock',
+      dbStatus: this.prismaService.getStatus(),
       stats: {
         onlineDriversCount: onlineDrivers.length,
         activeRidesCount,
@@ -203,6 +242,12 @@ export class AdminService {
     status: 'APPROVED' | 'SUSPENDED' | 'PENDING_VERIFICATION',
     note?: string,
   ) {
+    if (!status || !['APPROVED', 'SUSPENDED', 'PENDING_VERIFICATION'].includes(status)) {
+      throw new BadRequestException(
+        'status must be APPROVED, SUSPENDED, or PENDING_VERIFICATION',
+      );
+    }
+
     const app = this.kycApplications.find((k) => k.id === id || k.driverId === id);
     if (!app) {
       throw new NotFoundException(`KYC application ${id} not found`);
@@ -212,6 +257,8 @@ export class AdminService {
     if (note !== undefined) {
       app.note = note;
     }
+
+    this.persistKycToStore();
 
     this.ridesGateway.broadcastAdminEvent('KYC_UPDATED', {
       application: app,
@@ -231,7 +278,7 @@ export class AdminService {
   async topupDriverWallet(data: {
     driverId: string;
     amountBdt: number;
-    method?: 'BKASH' | 'NAGAD';
+    method?: 'BKASH' | 'NAGAD' | 'ADMIN_MANUAL';
     trxId?: string;
   }) {
     if (!data.driverId || !data.amountBdt) {
@@ -239,9 +286,8 @@ export class AdminService {
     }
 
     const method = data.method || 'BKASH';
-    const trxId =
-      data.trxId ||
-      `${method === 'NAGAD' ? 'NGD' : 'BKH'}${Math.floor(100000 + Math.random() * 900000)}`;
+    const prefix = method === 'NAGAD' ? 'NGD' : method === 'ADMIN_MANUAL' ? 'ADM' : 'BKH';
+    const trxId = data.trxId || `${prefix}${Math.floor(100000 + Math.random() * 900000)}`;
 
     const transaction = await this.walletService.topupViaBkash(
       data.driverId,
@@ -259,7 +305,7 @@ export class AdminService {
       method,
       transaction,
       wallet,
-      messageBangla: `৳ ${method === 'NAGAD' ? 'নগদ' : 'বিকাশ'} রিচার্জ সফল: ${wallet.driverName || data.driverId} (+${data.amountBdt} টাকা, বর্তমান ব্যালেন্স: ${wallet.currentBalance} টাকা)`,
+      messageBangla: `৳ ${method === 'NAGAD' ? 'নগদ' : method === 'ADMIN_MANUAL' ? 'অ্যাডমিন' : 'বিকাশ'} রিচার্জ সফল: ${wallet.driverName || data.driverId} (+${data.amountBdt} টাকা, বর্তমান ব্যালেন্স: ${wallet.currentBalance} টাকা)`,
     });
 
     return {

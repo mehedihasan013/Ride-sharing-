@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../../prisma/prisma.service';
 
 export interface UserSession {
   id: string;
@@ -16,10 +17,36 @@ export class AuthService {
   // In-memory OTP store (backed by Redis in production)
   private otpStore = new Map<string, { otp: string; expiresAt: number }>();
 
-  // In-memory user registry
+  // User registry backed by PrismaService durable store
   private users = new Map<string, any>();
 
-  constructor(private readonly jwtService: JwtService) {
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly prismaService: PrismaService,
+  ) {
+    this.loadOrSeedUsers();
+    this.prismaService.registerResetListener(() => {
+      this.seedDemoUsers();
+      this.persistUsers();
+    });
+  }
+
+  private loadOrSeedUsers() {
+    this.seedDemoUsers();
+    const storedUsers = this.prismaService.getUsers();
+    if (Array.isArray(storedUsers) && storedUsers.length > 0) {
+      for (const u of storedUsers) {
+        if (u && u.phoneNumber) {
+          this.users.set(u.phoneNumber, u);
+        }
+      }
+    } else {
+      this.persistUsers();
+    }
+  }
+
+  private seedDemoUsers() {
+    this.users.clear();
     // Demo accounts for instant development testing
     this.users.set('01700000001', {
       id: 'passenger_demo_1',
@@ -38,19 +65,26 @@ export class AuthService {
     });
   }
 
+  private persistUsers() {
+    this.prismaService.saveUsers(Array.from(this.users.values()));
+  }
+
   /**
    * Request 6-digit OTP for Bangladeshi mobile number (+8801...)
    */
-  async requestOtp(phoneNumber: string): Promise<{ success: boolean; messageBangla: string; demoOtp?: string }> {
+  async requestOtp(
+    phoneNumber: string,
+  ): Promise<{ success: boolean; messageBangla: string; demoOtp?: string }> {
     const cleaned = phoneNumber.replace(/[^0-9]/g, '');
     if (cleaned.length < 11) {
       throw new BadRequestException('সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017xxxxxxxx)');
     }
 
     // Generate 6-digit OTP (For dev/demo fallback: 123456)
-    const otp = process.env.NODE_ENV === 'production' 
-      ? Math.floor(100000 + Math.random() * 900000).toString()
-      : '123456';
+    const otp =
+      process.env.NODE_ENV === 'production'
+        ? Math.floor(100000 + Math.random() * 900000).toString()
+        : '123456';
 
     this.otpStore.set(cleaned, {
       otp,
@@ -96,6 +130,7 @@ export class AuthService {
         role,
       };
       this.users.set(cleaned, user);
+      this.persistUsers();
     }
 
     const payload = { sub: user.id, phone: user.phoneNumber, role: user.role };
@@ -123,7 +158,9 @@ export class AuthService {
       unionCouncilorCertUrl?: string;
     },
   ) {
-    this.logger.log(`Driver KYC submitted for ${driverId}: NID ${data.nidNumber}, Vehicle: ${data.vehicleType}`);
+    this.logger.log(
+      `Driver KYC submitted for ${driverId}: NID ${data.nidNumber}, Vehicle: ${data.vehicleType}`,
+    );
     return {
       success: true,
       status: 'APPROVED', // Instant approval for pilot stage

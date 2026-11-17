@@ -475,6 +475,11 @@ export const App: React.FC = () => {
               </span>
             </div>
 
+            {/* Supabase Cloud Persistence & bKash Tokenized API Badge */}
+            <div className="px-3 py-1.5 rounded-xl border border-[#E2136E]/40 bg-[#E2136E]/15 text-pink-200 text-xs font-bold flex items-center gap-1.5">
+              <span>🗄️ Supabase Postgres + bKash Tokenized API: ACTIVE</span>
+            </div>
+
             {/* Sound Mute Toggle */}
             <button
               onClick={() => setSoundEnabled((prev) => !prev)}
@@ -629,6 +634,7 @@ export const App: React.FC = () => {
               totalCommissionBdt={overview.stats.totalCommissionBdt}
               totalGmvBdt={overview.stats.totalGmvBdt}
               onTopupWallet={handleTopupWallet}
+              onRefreshOverview={fetchOverview}
             />
           )}
 

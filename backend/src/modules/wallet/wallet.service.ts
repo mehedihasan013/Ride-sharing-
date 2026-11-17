@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
 
 export interface WalletRecord {
   driverId: string;
@@ -14,7 +15,12 @@ export interface WalletTransactionRecord {
   id: string;
   driverId: string;
   driverName?: string;
-  type: 'BKASH_TOPUP' | 'NAGAD_TOPUP' | 'COMMISSION_DEDUCTION' | 'PROMOTIONAL_BONUS';
+  type:
+    | 'BKASH_TOPUP'
+    | 'NAGAD_TOPUP'
+    | 'ADMIN_MANUAL_TOPUP'
+    | 'COMMISSION_DEDUCTION'
+    | 'PROMOTIONAL_BONUS';
   amount: number;
   balanceAfter: number;
   referenceRideId?: string;
@@ -27,15 +33,55 @@ export interface WalletTransactionRecord {
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
 
-  // In-memory driver balance and ledger (backed by PostgreSQL in production)
+  // Driver balance and ledger backed by PrismaService durable store + Supabase PostgreSQL
   private wallets = new Map<string, WalletRecord>();
   private transactions: WalletTransactionRecord[] = [];
 
-  constructor() {
-    this.seedBhairabFleetWallets();
+  constructor(private readonly prismaService: PrismaService) {
+    this.loadOrSeedWallets();
+    this.prismaService.registerResetListener(() => {
+      this.seedBhairabFleetWallets();
+      this.persistToStore();
+    });
   }
 
-  private seedBhairabFleetWallets() {
+  private loadOrSeedWallets() {
+    const storedWallets = this.prismaService.getWallets();
+    const storedTransactions = this.prismaService.getTransactions();
+
+    if (Array.isArray(storedWallets) && storedWallets.length > 0) {
+      this.wallets.clear();
+      for (const w of storedWallets) {
+        this.wallets.set(w.driverId, {
+          ...w,
+          currentBalance: Number(w.currentBalance),
+          lastTopupAt: w.lastTopupAt ? new Date(w.lastTopupAt) : undefined,
+        });
+      }
+      this.transactions = (storedTransactions || []).map((t: any) => ({
+        ...t,
+        amount: Number(t.amount),
+        balanceAfter: Number(t.balanceAfter),
+        createdAt: t.createdAt ? new Date(t.createdAt) : new Date(),
+      }));
+      this.logger.log(
+        `Restored ${this.wallets.size} wallets and ${this.transactions.length} transactions from durable state`,
+      );
+    } else {
+      this.seedBhairabFleetWallets();
+      this.persistToStore();
+    }
+  }
+
+  private persistToStore() {
+    this.prismaService.saveWalletsAndTransactions(
+      Array.from(this.wallets.values()),
+      this.transactions,
+    );
+  }
+
+  seedBhairabFleetWallets() {
+    this.wallets.clear();
     const now = Date.now();
     const initialDrivers: WalletRecord[] = [
       {
@@ -178,6 +224,7 @@ export class WalletService {
         noteBangla: 'চলো ভৈরব স্বাগতম বোনাস',
         createdAt: new Date(),
       });
+      this.persistToStore();
     }
     return wallet;
   }
@@ -197,6 +244,19 @@ export class WalletService {
     commissionAmount: number,
     rideId: string,
   ): Promise<WalletTransactionRecord> {
+    // Idempotency check: prevent duplicate commission deduction for the same rideId
+    if (rideId) {
+      const existingTx = this.transactions.find(
+        (t) => t.type === 'COMMISSION_DEDUCTION' && t.referenceRideId === rideId,
+      );
+      if (existingTx) {
+        this.logger.warn(
+          `Idempotent skip: commission already deducted for ride ${rideId} (tx: ${existingTx.id})`,
+        );
+        return existingTx;
+      }
+    }
+
     const wallet = this.getWallet(driverId);
     wallet.currentBalance = Number((wallet.currentBalance - commissionAmount).toFixed(2));
 
@@ -213,6 +273,7 @@ export class WalletService {
     };
 
     this.transactions.push(tx);
+    this.persistToStore();
     this.logger.log(
       `Commission deducted: ${commissionAmount} BDT from Driver ${driverId}. Remaining: ${wallet.currentBalance}`,
     );
@@ -223,10 +284,21 @@ export class WalletService {
     driverId: string,
     amountBdt: number,
     trxId: string,
-    method: 'BKASH' | 'NAGAD' = 'BKASH',
+    method: 'BKASH' | 'NAGAD' | 'ADMIN_MANUAL' = 'BKASH',
   ): Promise<WalletTransactionRecord> {
     if (amountBdt < 20) {
       throw new BadRequestException('নূন্যতম রিচার্জ ২০ টাকা');
+    }
+
+    // Idempotency check: if gatewayTrxId already exists, return existing transaction without crediting twice
+    if (trxId) {
+      const existingTx = this.transactions.find((t) => t.gatewayTrxId === trxId);
+      if (existingTx) {
+        this.logger.warn(
+          `Idempotent replay blocked for gatewayTrxId=${trxId} (driver=${driverId})`,
+        );
+        return existingTx;
+      }
     }
 
     const wallet = this.getWallet(driverId);
@@ -234,19 +306,28 @@ export class WalletService {
     wallet.lastTopupAt = new Date();
 
     const isNagad = method === 'NAGAD';
+    const isAdminManual = method === 'ADMIN_MANUAL';
+    const txType: WalletTransactionRecord['type'] = isNagad
+      ? 'NAGAD_TOPUP'
+      : isAdminManual
+        ? 'ADMIN_MANUAL_TOPUP'
+        : 'BKASH_TOPUP';
+    const methodLabelBangla = isNagad ? 'নগদ' : isAdminManual ? 'অ্যাডমিন ম্যানুয়াল' : 'বিকাশ';
+
     const tx: WalletTransactionRecord = {
-      id: `tx_${isNagad ? 'nagad' : 'bkash'}_${Date.now()}`,
+      id: `tx_${isNagad ? 'nagad' : isAdminManual ? 'admin' : 'bkash'}_${Date.now()}`,
       driverId,
       driverName: wallet.driverName,
-      type: isNagad ? 'NAGAD_TOPUP' : 'BKASH_TOPUP',
+      type: txType,
       amount: Number(amountBdt),
       balanceAfter: wallet.currentBalance,
       gatewayTrxId: trxId,
-      noteBangla: `${isNagad ? 'নগদ' : 'বিকাশ'} ওয়ালেট রিচার্জ: ${amountBdt} টাকা`,
+      noteBangla: `${methodLabelBangla} ওয়ালেট রিচার্জ: ${amountBdt} টাকা`,
       createdAt: new Date(),
     };
 
     this.transactions.push(tx);
+    this.persistToStore();
     this.logger.log(
       `${method} topup success: ${amountBdt} BDT for Driver ${driverId}. New balance: ${wallet.currentBalance}`,
     );

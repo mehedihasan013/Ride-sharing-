@@ -6,7 +6,10 @@
 > **Figma Design File Name:** `CholoBhairab — Admin & Dispatch Command Center`  
 > **Figma File Key:** `JgztYNhQXk5PyeKDMG5lp5`  
 > **Figma Live Design URL:** [https://www.figma.com/design/JgztYNhQXk5PyeKDMG5lp5](https://www.figma.com/design/JgztYNhQXk5PyeKDMG5lp5)  
-> **Figma Canvas Automation Script:** [`docs/figma-canvas-builder.js`](./figma-canvas-builder.js)
+> **Figma Desktop Canvas Script:** [`docs/figma-canvas-builder.js`](./figma-canvas-builder.js)  
+> **Figma Mobile App Suite Script:** [`docs/figma-mobile-builder.js`](./figma-mobile-builder.js)  
+> **Figma Option C bKash Flow Script:** [`docs/figma-bkash-flow-builder.js`](./figma-bkash-flow-builder.js)  
+> **Supabase PostgreSQL 17 Project:** `fmhbugcullfemxtevpxw` (`ap-southeast-1` • RLS Enabled)
 
 ---
 
@@ -154,3 +157,191 @@ flowchart LR
 | `Nav / Driver KYC Verification` | `KycCenter` Tiered Document Verification View | `GET /admin/kyc`, `POST /admin/kyc/:id/status` |
 | `Nav / bKash Wallet & 8% Ledger` | `WalletLedger` Prepaid Wallet & Top-Up View | `GET /admin/wallets`, `POST /admin/wallet/topup` |
 | `Nav / 999 SOS Center` | `SafetyConsole` 999 Emergency SOS Console | `POST /admin/rides/:id/sos`, `ride:sos:triggered` |
+
+---
+
+## 6. Mobile App Suite Architecture (`4 × 390×844` Frames at `y = 1320`)
+
+Built via [`docs/figma-mobile-builder.js`](./figma-mobile-builder.js), a horizontal row of four `390px × 844px` mobile device frames (`28px` corner radius, `#0B131E` canvas fill, `40px` horizontal frame gap) sits cleanly at `y = 1320` directly beneath the `1440×900` Desktop Dispatch Command Center frame.
+
+```mermaid
+flowchart LR
+  subgraph MobileRow["CholoBhairab Mobile App Suite (y = 1320 • 4 x 390x844 Frames)"]
+    direction LR
+    F1["Frame 1 (390x844)\nPassenger App — 1. Map & Fare Offer"]
+    F2["Frame 2 (390x844)\nPassenger App — 2. Live InDrive Counter-Bids"]
+    F3["Frame 3 (390x844)\nDriver App — 1. Online Radar & Bangla Voice Bid"]
+    F4["Frame 4 (390x844)\nDriver App — 2. bKash Prepaid Wallet & Tiered KYC"]
+  end
+  F1 -->|"rider:request_ride (80 BDT)"| F3
+  F3 -->|"driver:submit_bid (90 BDT)"| F2
+  F2 -->|"rider:accept_bid -> 8% Fee"| F4
+```
+
+### 6.1 Frame 1 (`390×844`): `"Passenger App — 1. Map & Fare Offer"`
+- **Top Status Bar & Brand Header:**
+  - Status bar (`9:41`, `5G • GPS • 100%`)
+  - Brand Title: `চলো ভৈরব • যাত্রী` (`CholoBhairab Passenger • Bhairab`)
+  - Emergency Action Pill: `🚨 999 SOS` (`#F42A41` SOS Crimson)
+- **Stylized Bhairab Map Viewport (`358×196`, `#071019`):**
+  - Displays GPS coordinates badge (`24.0487°N, 90.9852°E • 1.89 km`) and stylized Meghna River corridor (`#0C243C`).
+  - Pickup Hub Pin (`#10B981`): `ভৈরব বাজার রেলওয়ে জংশন` (`Bhairab Railway Junction`)
+  - Dropoff Hub Pin (`#F59E0B`): `সৈয়দ নজরুল ইসলাম সেতু / মেঘনা ব্রিজ` (`1.89 km`)
+- **4 Multi-Modal Vehicle Selector Cards (`2×2` Auto-Layout Grid):**
+  1. `ইজিবাইক ৳50` (`Easy-Bike • 1–4 Seats` — Active Emerald selection `#006A4E` / `#10B981`)
+  2. `বাইক ৳70` (`Motorbike • Fast 1 Seat` — `#3B82F6`)
+  3. `সিএনজি ৳90` (`CNG Auto • 1–3 Seats` — `#F59E0B`)
+  4. `ঢাকা মাইক্রোবাস ৳300` (`Microbus • Highway` — `#8B5CF6`)
+- **InDrive Fare Negotiation Stepper & Primary CTA:**
+  - Interactive Stepper Row: `-৳5` pill, center **`৳80 প্রস্তাবিত ভাড়া`** (`Proposed Offer • Cash Only`), and `+৳5` pill (`#F59E0B`).
+  - Full-width Bangladesh Emerald CTA (`#006A4E`): **`⚡ রাইড রিকোয়েস্ট পাঠান • Request Ride`**.
+
+### 6.2 Frame 2 (`390×844`): `"Passenger App — 2. Live InDrive Counter-Bids"`
+- **Live Bidding Header:**
+  - Overline Badge: `REAL-TIME INDRIVE NEGOTIATION` (`#F59E0B`)
+  - Headline: `লাইভ ড্রাইভার বিডিং • 2 Drivers Bidding`
+  - Active Route Subtitle: `আপনার প্রস্তাব: ৳80 • ভৈরব রেলওয়ে জংশন → মেঘনা ব্রিজ`
+- **Incoming Counter-Bid Card 1 (`৳90` — `#10B981` Border):**
+  - Driver & Vehicle Info: `মোঃ রফিকুল ইসলাম • ভৈরব ইজিবাইক #১২ • ★ 4.9 • ২ মিনিট দূরে • ৳90`
+  - Verification Subtext: `Md. Rafiqul Islam • 350m away • পৌরসভা ওয়ার্ড কাউন্সিলর যাচাইকৃত`
+  - Action CTA: **`✓ গ্রহণ করুন (Accept ৳90)`** (`#006A4E` Emerald fill)
+- **Incoming Counter-Bid Card 2 (`৳95` — `#F59E0B` Border):**
+  - Driver & Vehicle Info: `কামাল হোসেন • সিএনজি অটো #০৮ • ★ 4.8 • ৩ মিনিট দূরে • ৳95`
+  - Verification Subtext: `Kamal Hossain • 600m away • পৌরসভা ওয়ার্ড কাউন্সিলর যাচাইকৃত`
+  - Action CTA: **`✓ গ্রহণ করুন (Accept ৳95)`** (`#006A4E` Emerald fill)
+- **Bottom Safety & Family Tracking Bar:**
+  - WhatsApp Live Tracking Button (`#006A4E` / `#10B981`): **`🔗 WhatsApp লাইভ ট্র্যাকিং শেয়ার`**
+  - National Emergency SOS Button (`#F42A41`): **`🚨 জরুরী ৯৯৯ SOS`**
+
+### 6.3 Frame 3 (`390×844`): `"Driver App — 1. Online Radar & Bangla Voice Bid"`
+- **Driver Status Header:**
+  - Brand Title: `চলো ভৈরব • চালক` (`CholoBhairab Driver`)
+  - Prepaid Wallet Pill: **`৳193`** (`#E2136E` bKash Magenta)
+  - Online Status Toggle Bar: **`🟢 আপনি অনলাইন আছেন`** (`ইজিবাইক #১২`)
+- **Bhairab Hotspot Radar Card (`#071019`):**
+  - Badge: `LIVE BHAIRAB HOTSPOT RADAR` (`#10B981`)
+  - Demand Zone: `ভৈরব রেলওয়ে স্টেশন জোন • High Demand` (`24.0487°N, 90.9852°E • 4 Active Ride Requests within 1.5 km`)
+- **Incoming Ride Opportunity Modal (`#111C2D` with `2px` `#F59E0B` Amber Border):**
+  - **Bangla Voice Alert Banner (`#0B131E`):**
+    * `🔊 "নতুন ট্রিপ রিকোয়েস্ট: ভৈরব বাজার রেলওয়ে জংশন থেকে মেঘনা ব্রিজ, প্রস্তাবিত ভাড়া ৮০ টাকা"`
+  - **Primary Emerald Accept Button (`#006A4E`):**
+    * **`✓ ৮০ টাকায় গ্রহণ করুন (Accept 80 BDT)`**
+  - **Quick Counter-Bid Pills Row (`#F59E0B`):**
+    * **`+১০ (৳90)`** | **`+২০ (৳100)`** | **`+৩০ (৳110)`**
+
+### 6.4 Frame 4 (`390×844`): `"Driver App — 2. bKash Prepaid Wallet & Tiered KYC"`
+- **Prepaid Wallet Card (`#111C2D` with `#10B981` Border):**
+  - Main Balance: **`বর্তমান ব্যালেন্স: ৳ 193.00`**
+  - Minimum Threshold Rule: `নূন্যতম ৫০ টাকা ব্যালেন্স বজায় রাখুন (Min 50 BDT Threshold)`
+  - Commission Badge: `8% স্বয়ংক্রিয় কমিশন` (`#006A4E`)
+- **bKash (`#E2136E`) & Nagad (`#F7941D`) Instant Recharge Section:**
+  - Provider Selector Pills: `● bKash (#E2136E)` and `○ Nagad নগদ (#F7941D)`
+  - Quick Recharge Amount Pills: **`+৳100`**, **`+৳200`**, **`+৳500`**
+  - Primary bKash CTA (`#E2136E`): **`৳ বিকাশ রিচার্জ করুন`**
+- **Tiered Municipal KYC Status Card (`#006A4E` Border):**
+  - Headline: **`✓ অনুমোদিত চালক • ভৈরব পৌরসভা ওয়ার্ড কাউন্সিলর প্রত্যয়নপত্র ও NID যাচাইকৃত`**
+  - Subtext: `Easy-Bike / CNG Tier • Ward 04 Councilor Certificate + Smart NID Verified`
+- **Recent Wallet Ledger Rows (`#0B131E` Cards):**
+  1. **`-৳7.00 ট্রিপ কমিশন (৮%)`** (`#F59E0B`) — `Trip #CB-904 (Fare ৳90) • Auto-Deducted`
+  2. **`+৳200.00 বিকাশ রিচার্জ`** (`#10B981`) — `bKash Webhook TrxID: BKH98241M • Instant Credit`
+
+---
+
+## 7. Cross-Platform Mapping: Mobile Figma Frames ↔ Codebase (`apps/passenger_app`, `apps/driver_app`, `apps/mobile_simulator`)
+
+| Figma Mobile Frame & Component | Flutter Passenger App (`apps/passenger_app`) | Flutter Driver App (`apps/driver_app`) | Dual-Phone Web Simulator (`apps/mobile_simulator`) | Backend Socket.IO / REST Contract |
+| :--- | :--- | :--- | :--- | :--- |
+| **Frame 1:** `Passenger App — 1. Map & Fare Offer` | `lib/screens/home_map_screen.dart` (Landmark picker, 4 vehicle cards, `-৳5/+৳5` stepper) | — | Left Phone (`PassengerPhone` — Map & Fare Offer tab) | `GET /geo/landmarks`, `GET /geo/fares/estimate`, `rider:request_ride` |
+| **Frame 2:** `Passenger App — 2. Live InDrive Counter-Bids` | `lib/screens/bidding_sheet.dart` & `lib/screens/active_ride_screen.dart` (Counter-bid cards, WhatsApp share, 999 SOS) | — | Left Phone (`PassengerPhone` — Live Counter-Bids & Safety bar) | `ride:new_bid`, `rider:accept_bid`, `ride:driver_assigned`, `POST /admin/rides/:id/sos` |
+| **Frame 3:** `Driver App — 1. Online Radar & Bangla Voice Bid` | — | `lib/screens/driver_radar_screen.dart` & `lib/services/bangla_voice_service.dart` (Online toggle, TTS prompt, `+১০/+২০/+৩০` pills) | Right Phone (`DriverPhone` — Radar, Web Speech Bangla TTS & Quick Bid pills) | `driver:go_online`, `driver:ride_opportunity`, `driver:submit_bid`, `driver:complete_ride` |
+| **Frame 4:** `Driver App — 2. bKash Prepaid Wallet & Tiered KYC` | — | `lib/screens/wallet_screen.dart` & `lib/screens/kyc_screen.dart` (`৳193` balance, `<50 BDT` lockout, bKash/Nagad top-up, Ward Councilor KYC) | Right Phone (`DriverPhone` — bKash Wallet & Tiered KYC tabs) | `GET /wallet/balance/:id`, `POST /wallet/topup/bkash`, `POST /auth/driver/kyc` |
+
+---
+
+## 8. Option C: Supabase PostgreSQL 17 Schema & 3-Screen bKash Tokenized Checkout Flow (`y = 2280`)
+
+Built via [`docs/figma-bkash-flow-builder.js`](./figma-bkash-flow-builder.js), a third horizontal row at `y = 2280` (with its Section Header Banner at `y = 2200`, directly below the 4 Mobile App Suite frames at `y = 1320`) visualizes the **Option C Production Persistence & Payment Security Architecture** combining **Supabase PostgreSQL 17.6 (`fmhbugcullfemxtevpxw`)** and the **bKash Tokenized Checkout API (`v1.2.0-beta`)**.
+
+```mermaid
+flowchart LR
+  subgraph OptionCRow["CholoBhairab Option C — bKash Tokenized Checkout Row (y = 2280 • 3 x 390x844 Frames)"]
+    direction LR
+    BF1["Frame 1 (390x844)\nbKash Flow — 1. Driver Low-Balance Lockout & Amount Select"]
+    BF2["Frame 2 (390x844)\nbKash Flow — 2. Official bKash Tokenized Checkout Gateway"]
+    BF3["Frame 3 (390x844)\nbKash Flow — 3. Server Execute Verified & Wallet Unlocked"]
+  end
+  BF1 -->|"POST /payments/bkash/create\n(PaymentID: TR0011...)"| BF2
+  BF2 -->|"OTP + PIN -> Callback / Execute\n(POST /payments/bkash/execute)"| BF3
+  BF3 -->|"UNIQUE gateway_trx_id\n(৳35.00 -> ৳235.00 Unlocked)"| Supabase[("Supabase PostgreSQL 17\nfmhbugcullfemxtevpxw")]
+```
+
+### 8.1 Section Header Banner (`y = 2200`, `1250×64`)
+- **Banner Name:** `CHOLOBHAIRAB OPTION C — SUPABASE POSTGRES 17 + bKASH TOKENIZED CHECKOUT v1.2.0-beta`
+- **Architecture Subtitle:** `Supabase Project: fmhbugcullfemxtevpxw (PostgreSQL 17.6 • RLS Locked) • Tokenized Flow: grant → create → callback → execute • UNIQUE gateway_trx_id`
+- **Status Pills:**
+  1. `🗄️ SUPABASE POSTGRES 17` (`#10B981` Emerald)
+  2. `💳 bKASH v1.2.0-beta` (`#E2136E` bKash Magenta)
+  3. `🔒 REPLAY SAFE` (`#F59E0B` Bid Amber)
+
+### 8.2 Frame 1 (`390×844` at `y = 2280`): `"bKash Flow — 1. Driver Low-Balance Lockout & Amount Select"`
+- **Crimson Low-Balance Lockout Alert Card (`#F42A41` Border & `14%` Tint):**
+  - Target Driver: **Anwar Mia (`driver_demo_4` • Easy-Bike `#04` • Chandiber General Hospital Hub)**
+  - Threshold Violation: **`৳35.00 < ৳50.00 Minimum Threshold`**
+  - Bangla Lockout Alert: **`🔒 কম ব্যালেন্স! বিড করতে নূন্যতম ৫০ টাকা প্রয়োজন`**
+  - Enforcement Rule: Blocks `driver:submit_bid` until the driver's prepaid balance is restored to `>= 50.00 BDT`.
+- **bKash Tokenized Recharge & Amount Selector Card (`#111C2D` with `#E2136E` Border):**
+  - Minimum Top-Up Guard Badge: `MIN TOP-UP: ৳20` (`BadRequestException` if `amountBdt < 20`).
+  - Preset Selector Pills:
+    * `+৳100` (`New: ৳135`)
+    * **`+৳200 Selected`** (`New: ৳235` — `#E2136E` active selection)
+    * `+৳500` (`New: ৳535`)
+  - Post-Topup Projection Strip: **`৳35.00 + ৳200.00 → ৳235.00`** (`🟢 Unlocks Bidding`).
+  - Primary Action CTA (`#E2136E`): **`⚡ Create Tokenized Payment (POST /payments/bkash/create)`**.
+
+### 8.3 Frame 2 (`390×844` at `y = 2280`): `"bKash Flow — 2. Official bKash Tokenized Checkout Gateway"`
+- **Official bKash Magenta Gateway Header (`#E2136E`):**
+  - Title: `bKash Tokenized Checkout` (`v1.2.0-beta` badge)
+  - Endpoint Context: `বিকাশ পেমেন্ট গেটওয়ে • tokenized.sandbox.bka.sh` (or built-in `/payments/bkash/mock/checkout?paymentID=...`)
+- **Merchant & Invoice Summary Card (`#111C2D` with `#E2136E` Border):**
+  - Merchant: **`CholoBhairab (চলো ভৈরব)`**
+  - Amount: **`৳200.00`** (`#10B981`)
+  - Identifiers: **`PaymentID: TR0011...`** (`TR0011948201`) and **`Invoice: INV-CB-...`** (`INV-CB-20261117`)
+- **Customer Wallet, 6-Digit OTP & 5-Digit PIN Verification Card:**
+  - bKash Account Number: **`01811-223304`** (`VERIFIED WALLET` badge)
+  - 6-Digit OTP Verification: **`1 2 3 4 5 6`** rendered across 6 individual `#E2136E`-bordered digit boxes
+  - 5-Digit bKash PIN: **`• • • • •`** masked security input
+- **Primary Execute CTA (`#E2136E`):**
+  - **`✓ পেমেন্ট নিশ্চিত করুন (Execute Payment)`** (`GET /payments/bkash/callback` / `POST /payments/bkash/execute`)
+
+### 8.4 Frame 3 (`390×844` at `y = 2280`): `"bKash Flow — 3. Server Execute Verified & Wallet Unlocked"`
+- **Emerald Verification Card (`#006A4E` / `#10B981` Border):**
+  - Status Badge: `EXECUTE COMPLETED • 200 OK` (`+৳200.00 BDT`)
+  - Headline: **`✓ বিকাশ পেমেন্ট সফল • TrxID: BKH948201M`**
+  - Metadata: `PaymentID: TR0011948201 • Invoice: INV-CB-20261117 • Payer: 01811-223304`
+- **Updated Driver Wallet Balance Card (`#111C2D` with `#10B981` Border):**
+  - Driver: `আনোয়ার মিয়া (driver_demo_4)`
+  - Balance Transition: **`৳35.00 → ৳235.00 • 🟢 বিডিং আনলকড!`**
+- **Supabase PostgreSQL (`fmhbugcullfemxtevpxw`) Persistence Confirmation Card (`#3B82F6` Border):**
+  - Badge: `🗄️ SUPABASE POSTGRESQL 17` (`fmhbugcullfemxtevpxw`)
+  - Headline: **`Persisted in public.bkash_payments & public.wallet_transactions with UNIQUE gateway_trx_id`**
+  - Replay / Double-Callback Guard: Calling `POST /payments/bkash/execute` or `GET /payments/bkash/callback` a second time with the same `paymentID` returns `{ alreadyCompleted: true }` and keeps the wallet balance at `৳235.00`.
+- **Return to Radar CTA (`#006A4E`):**
+  - **`⚡ লাইভ রাইডে বিড করুন • Start Bidding Now`**
+
+### 8.5 Supabase PostgreSQL 17 Schema (`public` Tables & RLS Lockdown)
+
+| Table Name (`public.*`) | Prisma Model | Primary Key / Unique Constraints | Purpose & Security Posture |
+| :--- | :--- | :--- | :--- |
+| `public.users` | `User` | `id` PK, `phone_number` UNIQUE | Passengers, Drivers, and Dispatch Admins (`RLS ENABLED`) |
+| `public.drivers` | `Driver` | `id` PK, `user_id` UNIQUE | Driver ratings, online telemetry coordinates, KYC & vehicle links (`RLS ENABLED`) |
+| `public.vehicles` | `Vehicle` | `id` PK, `driver_id` UNIQUE, `registration_number` UNIQUE | 4 Bhairab vehicle tiers: `EASYBIKE`, `CNG`, `BIKE`, `CAR_MICROBUS` (`RLS ENABLED`) |
+| `public.driver_kyc_applications` | `DriverKycApplication` | `id` PK, `driver_id` UNIQUE | Tiered KYC: Ward Councilor Certificate (`ward_no`) vs. BRTA License (`RLS ENABLED`) |
+| `public.driver_wallets` | `DriverWallet` | `id` PK, `driver_id` UNIQUE | Prepaid BDT balance (`Numeric(10,2)`), `< 50 BDT` auto-lockout (`RLS ENABLED`) |
+| `public.wallet_transactions` | `WalletTransaction` | `id` PK, `gateway_trx_id` UNIQUE | Ledger entries (`BKASH_TOPUP`, `COMMISSION_DEDUCTION`, `PROMOTIONAL_BONUS`) (`RLS ENABLED`) |
+| `public.bkash_payments` | `BkashPayment` | `id` PK, `payment_id` UNIQUE, `invoice_number` UNIQUE, `trx_id` UNIQUE | Tokenized Checkout state machine (`INITIATED` → `COMPLETED` / `CANCELLED` / `FAILED`) (`RLS ENABLED`) |
+| `public.rides` | `Ride` | `id` PK | Point-to-point Bhairab rides, proposed/agreed fares, 8% commission (`RLS ENABLED`) |
+| `public.ride_bids` | `RideBid` | `id` PK | Real-time InDrive driver counter-offers (`RLS ENABLED`) |
+| `public.sos_events` | `SosEvent` | `id` PK | 999 Emergency SOS alerts & dispatcher resolution timestamps (`RLS ENABLED`) |
+| `public.bhairab_landmarks` | `BhairabLandmark` | `id` PK | 6 pre-indexed Bhairab transit hubs with Bangla TTS labels (`RLS ENABLED`) |
+
+
