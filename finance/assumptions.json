@@ -1,0 +1,201 @@
+{
+  "_readme": "All money in BDT unless the key ends in Usd. Edit any number and re-run: node finance/model.js. Items marked VERIFY are estimates that should be confirmed with a quote.",
+
+  "global": {
+    "usdToBdt": 122,
+    "horizonMonths": 24,
+    "daysPerMonth": 30,
+    "contingencyPct": 15,
+    "vatOnCommissionPct": 5,
+    "_vatNote": "VERIFY with accountant/NBR: VAT on ride-sharing platform service charge. Treated as included inside the commission.",
+    "gatewayMdrPct": 1.5,
+    "_mdrNote": "VERIFY: bKash/Nagad PGW merchant fee on driver top-ups. Platform absorbs it (plan says 'no fees for drivers').",
+    "brtaEnlistmentFee": 100000,
+    "brtaAnnualRenewal": 10000,
+    "_brtaNote": "Ride-sharing Service Guidelines: Tk 1,00,000 company enlistment, Tk 10,000/yr renewal (rthd.gov.bd).",
+    "googlePlayOneTimeUsd": 25,
+    "appleDevYearlyUsd": 99,
+    "domainYearly": 1500
+  },
+
+  "demandShared": {
+    "intraMix": [
+      { "vehicle": "EASYBIKE", "share": 0.45, "avgFare": 40 },
+      { "vehicle": "CNG",      "share": 0.30, "avgFare": 100 },
+      { "vehicle": "BIKE",     "share": 0.25, "avgFare": 80 }
+    ],
+    "avgIntercityBooking": 1500,
+    "_intercityNote": "Blend of carpool seats (~550) and full car/microbus hire Bhairab-Dhaka (~3,800).",
+    "tripsPerActiveUserPerMonth": 6,
+    "monthlyUserChurnPct": 15,
+    "otpSmsPerActiveUserPerMonth": 0.3,
+    "otpSmsPerNewUser": 1.5
+  },
+
+  "scenarios": {
+    "lean": {
+      "label": "Lean / Bootstrapped",
+      "description": "Founder builds the backend unpaid, 1 hired Flutter dev, Android-only, no office.",
+      "buildMonths": 5,
+      "buildTeam": [
+        { "role": "Flutter developer (mid)", "monthly": 70000 },
+        { "role": "UI/UX designer (part-time)", "monthly": 20000 },
+        { "role": "Founder (unpaid)", "monthly": 0 }
+      ],
+      "postLaunchTeam": [
+        { "role": "Full-stack / Flutter developer", "monthly": 70000 },
+        { "role": "Field ops + support agent (Bhairab)", "monthly": 18000 }
+      ],
+      "officeMonthly": 5000,
+      "cloud": {
+        "buildUsd": 12,
+        "tiers": [
+          { "upToTripsPerDay": 300, "usd": 24 },
+          { "upToTripsPerDay": 1500, "usd": 60 },
+          { "upToTripsPerDay": 5000, "usd": 150 },
+          { "upToTripsPerDay": 1000000000, "usd": 400 }
+        ]
+      },
+      "saasMonthlyUsd": 5,
+      "iosLaunch": false,
+      "smsPrice": 0.30,
+      "barikoi": { "callsPerTrip": 2, "pricePerCall": 0.5, "freeCallsPerMonth": 10000 },
+      "oneTime": {
+        "legal": [
+          { "item": "RJSC company incorporation (incl. lawyer)", "amount": 25000 },
+          { "item": "Trade license + TIN + BIN/VAT registration", "amount": 8000 }
+        ],
+        "setup": [
+          { "item": "Android test devices (2)", "amount": 28000 },
+          { "item": "Onboarding booth kit (banner, table, canopy)", "amount": 15000 }
+        ],
+        "launch": [
+          { "item": "Driver wallet credit (200 drivers x 200)", "amount": 40000 },
+          { "item": "Vehicle stickers (200 x 120)", "amount": 24000 },
+          { "item": "Miking, leaflets, launch day", "amount": 20000 }
+        ]
+      },
+      "marketing": { "launchMonths": 6, "adsLaunchMonthly": 15000, "adsOngoingMonthly": 8000 },
+      "incentives": { "launchPctOfGmv": 2, "ongoingPctOfGmv": 0.5 },
+      "demand": { "intraTripsPerDayAtMaturity": 600, "intercityBookingsPerDayAtMaturity": 15 },
+      "ramp": { "midpointMonth": 8, "k": 0.5 },
+      "revenue": { "commissionPct": 8, "collectionRate": 0.9 }
+    },
+
+    "base": {
+      "label": "Base / Small team",
+      "description": "Hired 5-person build team, Android + iOS, small office in Bhairab, 4-month build.",
+      "buildMonths": 4,
+      "buildTeam": [
+        { "role": "Senior backend dev (NestJS)", "monthly": 130000 },
+        { "role": "Flutter devs (2)", "monthly": 160000 },
+        { "role": "UI/UX designer", "monthly": 50000 },
+        { "role": "QA tester", "monthly": 40000 }
+      ],
+      "postLaunchTeam": [
+        { "role": "Full-stack developer (maintenance)", "monthly": 120000 },
+        { "role": "Operations manager", "monthly": 30000 },
+        { "role": "Field onboarding agents (2)", "monthly": 36000 },
+        { "role": "Customer support (Bangla)", "monthly": 18000 }
+      ],
+      "officeMonthly": 20000,
+      "cloud": {
+        "buildUsd": 40,
+        "tiers": [
+          { "upToTripsPerDay": 300, "usd": 100 },
+          { "upToTripsPerDay": 1500, "usd": 180 },
+          { "upToTripsPerDay": 5000, "usd": 400 },
+          { "upToTripsPerDay": 1000000000, "usd": 900 }
+        ]
+      },
+      "saasMonthlyUsd": 35,
+      "iosLaunch": true,
+      "smsPrice": 0.45,
+      "barikoi": { "callsPerTrip": 2, "pricePerCall": 0.5, "freeCallsPerMonth": 10000 },
+      "oneTime": {
+        "legal": [
+          { "item": "RJSC company incorporation (incl. lawyer)", "amount": 40000 },
+          { "item": "Trade license + TIN + BIN/VAT registration", "amount": 10000 },
+          { "item": "Trademark filing (DPDT)", "amount": 15000 },
+          { "item": "Accountant setup / bookkeeping", "amount": 10000 },
+          { "item": "SMS masking sender ID approval", "amount": 500 }
+        ],
+        "setup": [
+          { "item": "Test devices (4 Android/iOS)", "amount": 60000 },
+          { "item": "Onboarding booth kit", "amount": 30000 },
+          { "item": "Office furniture + router", "amount": 50000 }
+        ],
+        "launch": [
+          { "item": "Driver wallet credit (300 drivers x 200)", "amount": 60000 },
+          { "item": "Vehicle stickers (300 x 120)", "amount": 36000 },
+          { "item": "Miking, leaflets, launch event", "amount": 50000 }
+        ]
+      },
+      "marketing": { "launchMonths": 6, "adsLaunchMonthly": 40000, "adsOngoingMonthly": 15000 },
+      "incentives": { "launchPctOfGmv": 3, "ongoingPctOfGmv": 1 },
+      "demand": { "intraTripsPerDayAtMaturity": 1000, "intercityBookingsPerDayAtMaturity": 40 },
+      "ramp": { "midpointMonth": 7, "k": 0.55 },
+      "revenue": { "commissionPct": 8, "collectionRate": 0.9 }
+    },
+
+    "growth": {
+      "label": "Growth / Funded",
+      "description": "Bigger team, aggressive marketing; higher demand target assumes coverage of Bhairab + Ashuganj/Kuliarchar.",
+      "buildMonths": 4,
+      "buildTeam": [
+        { "role": "Senior backend dev", "monthly": 150000 },
+        { "role": "Mid backend dev", "monthly": 90000 },
+        { "role": "Flutter devs (2)", "monthly": 170000 },
+        { "role": "UI/UX designer", "monthly": 60000 },
+        { "role": "QA tester", "monthly": 45000 }
+      ],
+      "postLaunchTeam": [
+        { "role": "Senior backend dev", "monthly": 130000 },
+        { "role": "Flutter dev", "monthly": 90000 },
+        { "role": "Operations manager", "monthly": 40000 },
+        { "role": "Field onboarding agents (4)", "monthly": 72000 },
+        { "role": "Customer support (2)", "monthly": 36000 },
+        { "role": "Marketing executive", "monthly": 35000 }
+      ],
+      "officeMonthly": 38000,
+      "cloud": {
+        "buildUsd": 80,
+        "tiers": [
+          { "upToTripsPerDay": 300, "usd": 250 },
+          { "upToTripsPerDay": 1500, "usd": 400 },
+          { "upToTripsPerDay": 5000, "usd": 700 },
+          { "upToTripsPerDay": 1000000000, "usd": 1500 }
+        ]
+      },
+      "saasMonthlyUsd": 80,
+      "iosLaunch": true,
+      "smsPrice": 0.45,
+      "barikoi": { "callsPerTrip": 2, "pricePerCall": 0.5, "freeCallsPerMonth": 10000 },
+      "oneTime": {
+        "legal": [
+          { "item": "RJSC company incorporation (incl. lawyer)", "amount": 60000 },
+          { "item": "Trade license + TIN + BIN/VAT registration", "amount": 12000 },
+          { "item": "Trademark filing (DPDT)", "amount": 15000 },
+          { "item": "Accountant / legal retainer setup", "amount": 15000 },
+          { "item": "SMS masking sender ID approval", "amount": 500 }
+        ],
+        "setup": [
+          { "item": "Test devices (6)", "amount": 90000 },
+          { "item": "Laptops (2)", "amount": 170000 },
+          { "item": "Onboarding booths (2)", "amount": 60000 },
+          { "item": "Office furniture + network", "amount": 120000 }
+        ],
+        "launch": [
+          { "item": "Driver wallet credit (600 drivers x 200)", "amount": 120000 },
+          { "item": "Vehicle stickers (600 x 120)", "amount": 72000 },
+          { "item": "Launch events, miking, leaflets", "amount": 120000 }
+        ]
+      },
+      "marketing": { "launchMonths": 6, "adsLaunchMonthly": 100000, "adsOngoingMonthly": 40000 },
+      "incentives": { "launchPctOfGmv": 5, "ongoingPctOfGmv": 1.5 },
+      "demand": { "intraTripsPerDayAtMaturity": 2200, "intercityBookingsPerDayAtMaturity": 90 },
+      "ramp": { "midpointMonth": 8, "k": 0.5 },
+      "revenue": { "commissionPct": 8, "collectionRate": 0.9 }
+    }
+  }
+}

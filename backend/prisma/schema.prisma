@@ -1,0 +1,206 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PASSENGER
+  DRIVER
+  ADMIN
+}
+
+enum VehicleType {
+  BIKE
+  CNG
+  EASYBIKE
+  CAR_MICROBUS
+}
+
+enum DriverStatus {
+  PENDING_VERIFICATION
+  APPROVED
+  SUSPENDED
+  ONLINE
+  OFFLINE
+  ON_TRIP
+}
+
+enum RideStatus {
+  SEARCHING
+  BIDDING
+  ACCEPTED
+  ARRIVING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  CASH
+  BKASH
+  NAGAD
+}
+
+enum TransactionType {
+  BKASH_TOPUP
+  NAGAD_TOPUP
+  COMMISSION_DEDUCTION
+  BONUS
+  PENALTY
+}
+
+model User {
+  id               String    @id @default(uuid())
+  phoneNumber      String    @unique
+  fullName         String
+  role             Role      @default(PASSENGER)
+  emergencyContact String?
+  profilePhotoUrl  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  driverProfile    Driver?
+  ridesAsPassenger Ride[]    @relation("PassengerRides")
+}
+
+model Driver {
+  id                    String        @id @default(uuid())
+  userId                String        @unique
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // KYC & Onboarding
+  nidNumber             String        @unique
+  nidFrontUrl           String?
+  nidBackUrl            String?
+  brtaLicenseNo         String?       // Required for BIKE and CAR
+  unionCouncilorCertUrl String?       // Valid for EASYBIKE & CNG in Bhairab
+  status                DriverStatus  @default(PENDING_VERIFICATION)
+  ratingAvg             Float         @default(5.0)
+  totalTrips            Int           @default(0)
+
+  // Real-time location
+  currentLat            Float?
+  currentLng            Float?
+  lastLocationUpdate    DateTime?
+
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  vehicle               Vehicle?
+  wallet                DriverWallet?
+  ridesAsDriver         Ride[]        @relation("DriverRides")
+  bids                  RideBid[]
+}
+
+model Vehicle {
+  id                 String      @id @default(uuid())
+  driverId           String      @unique
+  driver             Driver      @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  type               VehicleType
+  registrationNumber String?     // Optional for Easy-Bikes (Tomtoms)
+  modelName          String
+  color              String
+  capacity           Int         @default(1)
+  vehiclePhotoUrl    String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+}
+
+model DriverWallet {
+  id             String              @id @default(uuid())
+  driverId       String              @unique
+  driver         Driver              @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  currentBalance Decimal             @default(0.0) @db.Decimal(10, 2)
+  lockedBalance  Decimal             @default(0.0) @db.Decimal(10, 2)
+  lastTopupAt    DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  transactions   WalletTransaction[]
+}
+
+model WalletTransaction {
+  id               String          @id @default(uuid())
+  walletId         String
+  wallet           DriverWallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type             TransactionType
+  amount           Decimal         @db.Decimal(10, 2)
+  balanceAfter     Decimal         @db.Decimal(10, 2)
+  referenceRideId  String?
+  gatewayTrxId     String?
+  note             String?
+  createdAt        DateTime        @default(now())
+}
+
+model Ride {
+  id                        String        @id @default(uuid())
+  passengerId               String
+  passenger                 User          @relation("PassengerRides", fields: [passengerId], references: [id])
+  driverId                  String?
+  driver                    Driver?       @relation("DriverRides", fields: [driverId], references: [id])
+  
+  vehicleType               VehicleType
+  pickupLat                 Float
+  pickupLng                 Float
+  pickupAddress             String
+  dropoffLat                Float
+  dropoffLng                Float
+  dropoffAddress            String
+  
+  initialOfferFare          Decimal       @db.Decimal(10, 2)
+  finalAgreedFare           Decimal?      @db.Decimal(10, 2)
+  platformCommissionPercent Decimal       @default(8.0) @db.Decimal(5, 2)
+  platformCommissionAmount  Decimal?      @db.Decimal(10, 2)
+
+  status                    RideStatus    @default(SEARCHING)
+  paymentMethod             PaymentMethod @default(CASH)
+  isCashCollected           Boolean       @default(false)
+  
+  // Safety & Live Tracking
+  liveTrackingToken         String        @unique @default(uuid())
+  isSosTriggered            Boolean       @default(false)
+
+  // Intercity Scheduled Trip fields
+  isIntercity               Boolean       @default(false)
+  scheduledDeparture        DateTime?
+  bookedSeats               Int           @default(1)
+
+  bids                      RideBid[]
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+}
+
+model RideBid {
+  id         String    @id @default(uuid())
+  rideId     String
+  ride       Ride      @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  driverId   String
+  driver     Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  
+  bidAmount  Decimal   @db.Decimal(10, 2)
+  etaMinutes Int       @default(5)
+  status     BidStatus @default(PENDING)
+  createdAt  DateTime  @default(now())
+}
+
+model BhairabLandmark {
+  id           String      @id @default(uuid())
+  englishName  String
+  banglaName   String
+  category     String      // Transit, Bridge, Commercial, Residential, Healthcare
+  latitude     Float
+  longitude    Float
+  popularModes VehicleType[]
+  createdAt    DateTime    @default(now())
+}
