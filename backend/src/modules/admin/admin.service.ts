@@ -4,6 +4,7 @@ import { RidesGateway } from '../rides/rides.gateway';
 import { WalletService } from '../wallet/wallet.service';
 import { BHAIRAB_LANDMARKS } from '../geo/bhairab-landmarks';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isDemoSeedEnabled } from '../../common/demo';
 
 export interface DriverKycRecord {
   id: string;
@@ -48,7 +49,7 @@ export class AdminService {
       this.logger.log(
         `Restored ${this.kycApplications.length} KYC applications from durable state`,
       );
-    } else {
+    } else if (isDemoSeedEnabled()) {
       this.seedKycApplications();
       this.persistKycToStore();
     }

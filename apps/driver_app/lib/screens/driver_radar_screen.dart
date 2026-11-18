@@ -296,8 +296,8 @@ class _DriverRadarScreenState extends State<DriverRadarScreen> {
                   ),
                   label: Text(
                     socketService.isSocketConnected
-                        ? 'লাইভ সার্ভার সংযুক্ত (4000)'
-                        : 'সিমুলেশন রেডি (localhost:4000)',
+                        ? 'লাইভ সার্ভার সংযুক্ত (${socketService.serverUrl})'
+                        : 'সিমুলেশন রেডি (${socketService.serverUrl})',
                     style: const TextStyle(fontSize: 11.5),
                   ),
                 ),

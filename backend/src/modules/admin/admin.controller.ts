@@ -1,6 +1,15 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, ForbiddenException } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { AdminKeyGuard } from '../../common/admin-key.guard';
+import { isDemoMode } from '../../common/demo';
 
+const assertNotProduction = () => {
+  if (process.env.NODE_ENV === 'production' && !isDemoMode()) {
+    throw new ForbiddenException('Disabled in production');
+  }
+};
+
+@UseGuards(AdminKeyGuard)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
@@ -42,6 +51,7 @@ export class AdminController {
 
   @Post('simulate-ride')
   simulateRide() {
+    assertNotProduction();
     return this.adminService.simulateLiveBhairabRide();
   }
 
@@ -55,6 +65,7 @@ export class AdminController {
 
   @Post('reset-seed')
   resetSeed() {
+    assertNotProduction();
     return this.adminService.resetSeedState();
   }
 }

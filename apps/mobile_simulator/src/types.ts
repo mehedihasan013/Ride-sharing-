@@ -69,45 +69,40 @@ export const BHAIRAB_LANDMARKS: BhairabLandmark[] = [
 
 export interface VehicleOptionMeta {
   type: VehicleType;
-  emoji: string;
   banglaLabel: string;
   englishLabel: string;
   seats: string;
-  badgeColor: string;
+  dotClass: string; // vehicle identity token class
 }
 
 export const VEHICLE_OPTIONS: VehicleOptionMeta[] = [
   {
     type: 'EASYBIKE',
-    emoji: '🛺',
     banglaLabel: 'ইজিবাইক',
     englishLabel: 'Easy-Bike (Tomtom)',
     seats: '৪-৬ আসন',
-    badgeColor: '#10B981',
+    dotClass: 'bg-easybike',
   },
   {
     type: 'BIKE',
-    emoji: '🏍️',
     banglaLabel: 'বাইক',
     englishLabel: 'Motorbike',
     seats: '১ আসন',
-    badgeColor: '#3B82F6',
+    dotClass: 'bg-bike',
   },
   {
     type: 'CNG',
-    emoji: '🛺',
     banglaLabel: 'সিএনজি',
     englishLabel: 'CNG Auto',
     seats: '৩ আসন',
-    badgeColor: '#F59E0B',
+    dotClass: 'bg-cng',
   },
   {
     type: 'CAR_MICROBUS',
-    emoji: '🚐',
     banglaLabel: 'মাইক্রোবাস',
     englishLabel: 'Microbus / Noah',
     seats: '৭-১০ আসন',
-    badgeColor: '#8B5CF6',
+    dotClass: 'bg-microbus',
   },
 ];
 

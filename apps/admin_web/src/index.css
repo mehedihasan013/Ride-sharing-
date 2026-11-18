@@ -2,110 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Dispatch console: dark, because dispatchers watch it all day and night. */
+:root {
+  color-scheme: dark;
+  --page: 14 16 18;        /* #0E1012 */
+  --surface: 22 25 28;     /* #16191C */
+  --raised: 30 34 38;      /* #1E2226 */
+  --line: 43 48 54;        /* #2B3036 */
+  --ink: 236 238 240;      /* #ECEEF0 */
+  --ink-2: 166 173 180;    /* #A6ADB4 */
+  --ink-3: 126 134 142;    /* #7E868E, 4.7:1 on surface */
+  --brand: 0 106 78;       /* #006A4E Bangladesh green, fills only */
+  --on-brand: 255 255 255;
+  --brand-text: 61 186 140;/* #3DBA8C brand as text/icon on dark */
+  --danger: 240 74 90;     /* #F04A5A SOS and blocking errors only */
+  --warning: 242 169 59;   /* #F2A93B bids, low balance */
+  --bkash: 226 19 110;     /* #E2136E bKash surfaces only */
+  --easybike: 61 186 140;
+  --cng: 242 169 59;
+  --bike: 91 155 240;
+  --microbus: 157 132 245;
+}
+
 @layer base {
   body {
-    background-color: #0B131E;
-    color: #F1F5F9;
-    font-family: 'Inter', 'Hind Siliguri', system-ui, -apple-system, sans-serif;
-    overflow-x: hidden;
+    background-color: rgb(var(--page));
+    color: rgb(var(--ink));
+    font-family: Geist, 'Hind Siliguri', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--brand-text));
+    outline-offset: 2px;
   }
 }
 
-/* Custom Glassmorphic Card */
-.glass-card {
-  background-color: #111C2D;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-}
-
-.glass-card-hover {
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.glass-card-hover:hover {
-  border-color: rgba(16, 185, 129, 0.3);
-  background-color: #152238;
-}
-
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #0B131E;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #1E293B;
+  background: rgb(var(--line));
   border-radius: 9999px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #334155;
-}
-
-/* Leaflet Dark Theme Overrides */
 .leaflet-container {
-  background-color: #080E17 !important;
-  font-family: 'Inter', 'Hind Siliguri', sans-serif !important;
+  background-color: rgb(var(--page)) !important;
+  font-family: Geist, 'Hind Siliguri', sans-serif !important;
 }
-
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background-color: #111C2D !important;
-  color: #F8FAFC !important;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65) !important;
-  border-radius: 12px !important;
+  background-color: rgb(var(--raised)) !important;
+  color: rgb(var(--ink)) !important;
+  border: 1px solid rgb(var(--line));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.4) !important;
+  border-radius: 8px !important;
 }
-
 .leaflet-control-zoom a {
-  background-color: #111C2D !important;
-  color: #E2E8F0 !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
+  background-color: rgb(var(--surface)) !important;
+  color: rgb(var(--ink)) !important;
+  border-color: rgb(var(--line)) !important;
 }
-
 .leaflet-control-zoom a:hover {
-  background-color: #1E293B !important;
-  color: #10B981 !important;
+  background-color: rgb(var(--raised)) !important;
+}
+/* OSM tiles are light only; this turns them into a muted dark map for the console. */
+.map-dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.4);
+}
+.leaflet-control-attribution {
+  background: rgb(var(--surface) / 0.8) !important;
+  color: rgb(var(--ink-3)) !important;
+}
+.leaflet-control-attribution a {
+  color: rgb(var(--ink-2)) !important;
 }
 
-@keyframes radar-pulse {
-  0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
-  }
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 12px rgba(16, 185, 129, 0);
-  }
-  100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-  }
+/* The one pulse that earns its place: an unacknowledged SOS. */
+@keyframes sos-ring {
+  0% { box-shadow: 0 0 0 0 rgb(var(--danger) / 0.6); }
+  100% { box-shadow: 0 0 0 14px rgb(var(--danger) / 0); }
 }
-
-@keyframes sos-pulse {
-  0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(244, 42, 65, 0.85);
-  }
-  70% {
-    transform: scale(1.05);
-    box-shadow: 0 0 0 18px rgba(244, 42, 65, 0);
-  }
-  100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(244, 42, 65, 0);
-  }
-}
-
-.pulse-emerald {
-  animation: radar-pulse 2s infinite;
-}
-
 .pulse-sos {
-  animation: sos-pulse 1.4s infinite;
+  animation: sos-ring 1.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

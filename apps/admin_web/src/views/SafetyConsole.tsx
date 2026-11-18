@@ -1,16 +1,6 @@
 import React, { useState } from 'react';
 import { ActiveRide, OnlineDriver } from '../types/admin';
-import {
-  AlertOctagon,
-  CheckCircle2,
-  Copy,
-  ExternalLink,
-  MapPin,
-  PhoneCall,
-  Share2,
-  ShieldAlert,
-  Siren,
-} from 'lucide-react';
+import { Check, CheckCircle2, Copy, Siren } from 'lucide-react';
 
 interface SafetyConsoleProps {
   activeRides: ActiveRide[];
@@ -18,6 +8,14 @@ interface SafetyConsoleProps {
   onTriggerDemoSos: () => Promise<void>;
   onResolveSos: (rideId: string) => Promise<void>;
 }
+
+const formatTime = (ts: number) =>
+  new Date(ts).toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 
 export const SafetyConsole: React.FC<SafetyConsoleProps> = ({
   activeRides,
@@ -46,200 +44,200 @@ export const SafetyConsole: React.FC<SafetyConsoleProps> = ({
     }
   };
 
+  const copyBtn = (token: string) => (
+    <button
+      type="button"
+      onClick={() => handleCopyLink(token)}
+      className="h-8 px-2.5 rounded-md border border-line text-[13px] text-ink hover:bg-raised flex items-center gap-1.5 shrink-0 whitespace-nowrap transition-colors duration-150 ease-out"
+    >
+      {copiedToken === token ? (
+        <>
+          <Check className="w-3.5 h-3.5 text-brand-text" aria-hidden /> কপি হয়েছে
+        </>
+      ) : (
+        <>
+          <Copy className="w-3.5 h-3.5" aria-hidden /> লিংক কপি
+        </>
+      )}
+    </button>
+  );
+
   return (
-    <div className="space-y-6">
-      {/* 999 Emergency Response Header Banner */}
-      <div className="glass-card rounded-2xl p-5 border-2 border-[#F42A41]/50 bg-gradient-to-r from-[#2A0E17] via-[#181528] to-[#111C2D]">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F42A41]/25 border border-[#F42A41] text-rose-200 text-xs font-extrabold">
-              <Siren className="w-4 h-4 text-[#F42A41]" />
-              <span>জাতীয় জরুরি সেবা ৯৯৯ ও ভৈরব থানা কন্ট্রোল রুম • Emergency SOS Console</span>
-            </div>
-            <h2 className="text-xl font-extrabold text-white">
-              রাতের হাইওয়ে ও মেঘনা ব্রিজ করিডোর নিরাপত্তা মনিটরিং
-            </h2>
-            <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
-              যাত্রী বা চালক অ্যাপের <strong className="text-rose-300">🚨 999 SOS বাটন</strong> চাপলে
-              তাৎক্ষণিকভাবে জিপিএস লোকেশন, হোয়াটসঅ্যাপ লাইভ ট্র্যাকিং লিংক (`/rides/track/:token`) এবং ভৈরব
-              থানা ডিউটি অফিসার হটলাইনে অ্যালার্ট চলে যায়।
-            </p>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-3xl">
+          <h2 className="text-xl font-semibold text-ink">জরুরি SOS</h2>
+          <p className="text-[13px] text-ink-2 mt-1">
+            যাত্রী বা চালক অ্যাপে SOS চাপলে তার জিপিএস লোকেশন ও লাইভ ট্র্যাকিং লিংক এখানে আসে।
+            ব্যবস্থা নেওয়ার পর সমাধান হিসেবে চিহ্নিত করুন।
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="text-xs">
+            <div className="text-ink-3">ভৈরব থানা কন্ট্রোল রুম</div>
+            <div className="font-mono tabular-nums text-sm text-ink mt-0.5">০১৭১৩-৩৭৩৪৮৫ · ৯৯৯</div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <div className="p-3 rounded-xl bg-[#0B131E]/90 border border-rose-500/30">
-              <div className="text-[10px] uppercase tracking-wider text-rose-400 font-bold">
-                ভৈরব থানা পুলিশ কন্ট্রোল রুম
-              </div>
-              <div className="text-sm font-extrabold text-white mt-0.5">📞 ০১৭১৩-৩৭৩৪৮৫ / ৯৯৯</div>
-              <div className="text-[10px] text-slate-400">২৪/৭ হাইওয়ে টহল সংযুক্ত</div>
-            </div>
-
-            <button
-              onClick={onTriggerDemoSos}
-              className="py-3 px-4 rounded-xl bg-[#F42A41] hover:bg-rose-600 text-white text-xs font-extrabold shadow-lg shadow-[#F42A41]/30 transition-all flex items-center gap-2"
-            >
-              <AlertOctagon className="w-4 h-4" />
-              <span>🚨 999 SOS টেস্ট অ্যালার্ট ট্রিগার করুন</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onTriggerDemoSos}
+            className="h-9 px-3 rounded-md border border-danger/40 text-danger text-[13px] hover:bg-danger/10 flex items-center gap-1.5 transition-colors duration-150 ease-out"
+          >
+            <Siren className="w-4 h-4" aria-hidden />
+            পরীক্ষামূলক SOS
+          </button>
         </div>
       </div>
 
-      {/* Active SOS Alerts Section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-[#F42A41]" />
-            <span>সক্রিয় জরুরি SOS অ্যালার্ট ({sosRides.length})</span>
-          </h3>
-        </div>
+      <section aria-labelledby="sos-heading" className="space-y-3">
+        <h3 id="sos-heading" className="text-sm font-semibold text-ink flex items-center gap-2">
+          সক্রিয় SOS
+          <span className={`font-mono tabular-nums ${sosRides.length > 0 ? 'text-danger' : 'text-ink-3'}`}>
+            {sosRides.length}
+          </span>
+        </h3>
 
         {sosRides.length === 0 ? (
-          <div className="glass-card rounded-2xl p-8 text-center border border-emerald-500/20">
-            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
-            <h4 className="text-base font-bold text-white">
-              ভৈরব করিডোরে এই মুহূর্তে কোনো সক্রিয় SOS বিপদ সংকেত নেই
-            </h4>
-            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-              সকল সক্রিয় ট্রিপ নিরাপদে পর্যবেক্ষণ করা হচ্ছে। জরুরি মহড়া পরীক্ষা করতে উপরের &ldquo;🚨 999 SOS
-              টেস্ট অ্যালার্ট&rdquo; বাটনে ক্লিক করুন।
-            </p>
+          <div className="bg-surface border border-line rounded-lg px-4 py-6 flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-brand-text shrink-0 mt-0.5" aria-hidden />
+            <div>
+              <p className="text-sm text-ink">এখন কোনো সক্রিয় SOS নেই</p>
+              <p className="text-[13px] text-ink-2 mt-1">
+                সব চলমান ট্রিপ স্বাভাবিক আছে। মহড়ার জন্য &ldquo;পরীক্ষামূলক SOS&rdquo; চাপুন।
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {sosRides.map((ride) => {
               const assignedDriver =
                 onlineDrivers.find((d) => d.driverId === ride.selectedDriverId) ||
                 onlineDrivers[0];
               const trackPath = `/rides/track/${ride.liveTrackingToken}`;
+              const resolving = resolvingId === ride.id;
 
               return (
-                <div
+                <article
                   key={ride.id}
-                  className="glass-card rounded-2xl p-5 border-2 border-[#F42A41] bg-gradient-to-b from-rose-950/40 to-[#111C2D] space-y-4"
+                  role="alert"
+                  className="bg-surface border border-danger/60 rounded-lg"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="px-3 py-1 rounded-full bg-[#F42A41] text-white text-xs font-extrabold animate-pulse flex items-center gap-1.5">
-                      <Siren className="w-3.5 h-3.5" /> 🚨 সক্রিয় 999 SOS বিপদ সংকেত!
+                  <header className="px-4 py-3 border-b border-danger/30 bg-danger/10 flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-danger">
+                      <span className="pulse-sos h-2 w-2 rounded-full bg-danger" aria-hidden />
+                      SOS সক্রিয়
+                      {ride.sosTriggeredAt && (
+                        <span className="font-mono tabular-nums text-xs font-normal">
+                          {formatTime(ride.sosTriggeredAt)}
+                        </span>
+                      )}
                     </span>
-                    <span className="text-xs font-mono text-rose-300">ID: {ride.id}</span>
-                  </div>
+                    <span className="text-xs font-mono text-ink-3">{ride.id}</span>
+                  </header>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 rounded-xl bg-[#0B131E]/90 border border-white/10">
-                      <div className="text-[10px] uppercase text-slate-400 font-bold">
-                        যাত্রীর তথ্য (Passenger)
-                      </div>
-                      <div className="text-sm font-bold text-white mt-0.5">
-                        {ride.passengerName}
-                      </div>
-                      <div className="text-emerald-400 font-semibold mt-1 flex items-center gap-1">
-                        <PhoneCall className="w-3.5 h-3.5" /> {ride.passengerPhone}
-                      </div>
-                    </div>
+                  <dl className="px-4 py-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px]">
+                    <dt className="text-ink-3">যাত্রী</dt>
+                    <dd className="text-ink">
+                      {ride.passengerName}{' '}
+                      <span className="font-mono tabular-nums text-ink-2">{ride.passengerPhone}</span>
+                    </dd>
+                    <dt className="text-ink-3">চালক</dt>
+                    <dd className="text-ink">
+                      {assignedDriver ? (
+                        <>
+                          {assignedDriver.driverName}{' '}
+                          <span className="font-mono tabular-nums text-ink-2">
+                            {assignedDriver.driverPhone}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-ink-3">জানা নেই</span>
+                      )}
+                    </dd>
+                    <dt className="text-ink-3">জিপিএস</dt>
+                    <dd className="font-mono tabular-nums text-ink">
+                      {ride.pickupLat.toFixed(4)}, {ride.pickupLng.toFixed(4)}
+                    </dd>
+                    <dt className="text-ink-3">রুট</dt>
+                    <dd className="text-ink-2">
+                      {ride.pickupAddress} → {ride.dropoffAddress}
+                    </dd>
+                    <dt className="text-ink-3">ট্র্যাকিং</dt>
+                    <dd className="flex items-center justify-between gap-2 min-w-0">
+                      <span className="font-mono text-xs text-ink-2 truncate">{trackPath}</span>
+                      {copyBtn(ride.liveTrackingToken)}
+                    </dd>
+                  </dl>
 
-                    <div className="p-3 rounded-xl bg-[#0B131E]/90 border border-white/10">
-                      <div className="text-[10px] uppercase text-slate-400 font-bold">
-                        চালক ও যানবাহন (Driver)
-                      </div>
-                      <div className="text-sm font-bold text-white mt-0.5">
-                        {assignedDriver?.driverName || 'মোঃ রফিকুল ইসলাম'}
-                      </div>
-                      <div className="text-amber-400 font-semibold mt-1 flex items-center gap-1">
-                        <PhoneCall className="w-3.5 h-3.5" />{' '}
-                        {assignedDriver?.driverPhone || '01711-223344'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-[#0B131E]/90 border border-rose-500/30 text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 text-rose-300 font-bold">
-                      <MapPin className="w-3.5 h-3.5" />
-                      <span>
-                        সর্বশেষ জিপিএস অবস্থান: {ride.pickupLat.toFixed(4)}°N,{' '}
-                        {ride.pickupLng.toFixed(4)}°E
-                      </span>
-                    </div>
-                    <div className="text-slate-300">
-                      রুট: {ride.pickupAddress} → {ride.dropoffAddress}
-                    </div>
-                  </div>
-
-                  {/* WhatsApp Live Tracking Link Preview */}
-                  <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1">
-                        <Share2 className="w-3 h-3" /> হোয়াটসঅ্যাপ লাইভ ট্র্যাকিং লিংক (WhatsApp Share)
-                      </div>
-                      <div className="text-xs font-mono text-slate-200 truncate mt-0.5">
-                        {trackPath}
-                      </div>
-                    </div>
+                  <div className="px-4 pb-4">
                     <button
-                      onClick={() => handleCopyLink(ride.liveTrackingToken)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/40 text-xs font-bold shrink-0 flex items-center gap-1"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>{copiedToken === ride.liveTrackingToken ? 'কপি হয়েছে!' : 'কপি লিংক'}</span>
-                    </button>
-                  </div>
-
-                  {/* Resolve SOS Action Button */}
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
-                      disabled={resolvingId === ride.id}
+                      type="button"
+                      disabled={resolving}
                       onClick={() => handleResolve(ride.id)}
-                      className="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-1.5"
+                      className="w-full h-9 rounded-md bg-brand text-on-brand text-[13px] font-medium hover:bg-brand/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-150 ease-out"
                     >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>
-                        {resolvingId === ride.id
-                          ? 'সমাধান করা হচ্ছে...'
-                          : '✓ সমাধান করুন (Resolve SOS)'}
-                      </span>
+                      {resolving ? 'সমাধান করা হচ্ছে…' : 'সমাধান হয়েছে'}
                     </button>
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* All Active Rides Live Tracking Tokens Table */}
-      <div className="glass-card rounded-2xl p-5 border border-white/10">
-        <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-          <ExternalLink className="w-4 h-4 text-emerald-400" />
-          <span>সকল চলমান ট্রিপের লাইভ ট্র্যাকিং টোকেন ও নিরাপত্তা প্রিভিউ (`/rides/track/:token`)</span>
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {activeRides.map((ride) => (
-            <div
-              key={ride.id}
-              className="p-3.5 rounded-xl bg-[#0B131E] border border-white/10 flex items-center justify-between gap-3 text-xs"
-            >
-              <div className="min-w-0">
-                <div className="font-bold text-white truncate">
-                  {ride.passengerName} ({ride.passengerPhone})
-                </div>
-                <div className="text-slate-400 truncate mt-0.5">
-                  {ride.pickupAddress} → {ride.dropoffAddress}
-                </div>
-                <div className="font-mono text-emerald-400 text-[11px] mt-1">
-                  /rides/track/{ride.liveTrackingToken}
-                </div>
-              </div>
-              <button
-                onClick={() => handleCopyLink(ride.liveTrackingToken)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 font-semibold shrink-0"
-              >
-                {copiedToken === ride.liveTrackingToken ? '✓ কপিড' : 'শেয়ার লিংক'}
-              </button>
-            </div>
-          ))}
+      <section className="bg-surface border border-line rounded-lg" aria-labelledby="tracking-heading">
+        <div className="px-4 py-3 border-b border-line">
+          <h3 id="tracking-heading" className="text-sm font-semibold text-ink">
+            চলমান ট্রিপের ট্র্যাকিং লিংক
+          </h3>
+          <p className="text-xs text-ink-3 mt-0.5">
+            পরিবার বা পুলিশের সাথে শেয়ার করার জন্য লিংক কপি করুন।
+          </p>
         </div>
-      </div>
+
+        {activeRides.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-ink-2">এখন কোনো চলমান ট্রিপ নেই।</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-xs text-ink-3 border-b border-line">
+                  <th className="font-medium px-4 py-2">যাত্রী</th>
+                  <th className="font-medium px-4 py-2">রুট</th>
+                  <th className="font-medium px-4 py-2">লিংক</th>
+                  <th className="font-medium px-4 py-2">
+                    <span className="sr-only">কপি</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {activeRides.map((ride) => (
+                  <tr key={ride.id}>
+                    <td className="px-4 py-2.5">
+                      <div className="text-ink flex items-center gap-1.5">
+                        {ride.sosActive && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-danger" aria-label="SOS সক্রিয়" />
+                        )}
+                        {ride.passengerName}
+                      </div>
+                      <div className="text-xs font-mono tabular-nums text-ink-3">{ride.passengerPhone}</div>
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-2">
+                      {ride.pickupAddress} → {ride.dropoffAddress}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-ink-2 whitespace-nowrap">
+                      /rides/track/{ride.liveTrackingToken}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex justify-end">{copyBtn(ride.liveTrackingToken)}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 };

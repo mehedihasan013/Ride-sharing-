@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/driver_models.dart';
 
+/// Backend base URL; override at build time with --dart-define=API_URL=https://api.example.com
+const String kApiUrl =
+    String.fromEnvironment('API_URL', defaultValue: 'http://localhost:4000');
+
 class WalletFetchResult {
   final DriverWalletModel wallet;
   final List<WalletTransactionModel> transactions;
@@ -75,7 +79,7 @@ class DriverApiService {
   final http.Client _client;
 
   DriverApiService({
-    this.baseUrl = 'http://localhost:4000',
+    this.baseUrl = kApiUrl,
     http.Client? client,
   }) : _client = client ?? http.Client();
 

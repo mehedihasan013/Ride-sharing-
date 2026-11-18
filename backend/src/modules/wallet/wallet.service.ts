@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isDemoSeedEnabled } from '../../common/demo';
 
 export interface WalletRecord {
   driverId: string;
@@ -67,7 +68,7 @@ export class WalletService {
       this.logger.log(
         `Restored ${this.wallets.size} wallets and ${this.transactions.length} transactions from durable state`,
       );
-    } else {
+    } else if (isDemoSeedEnabled()) {
       this.seedBhairabFleetWallets();
       this.persistToStore();
     }
@@ -200,6 +201,10 @@ export class WalletService {
         createdAt: new Date(now - 3600 * 1000 * 0.5),
       },
     ];
+  }
+
+  hasWallet(driverId: string): boolean {
+    return this.wallets.has(driverId);
   }
 
   getWallet(driverId: string): WalletRecord {

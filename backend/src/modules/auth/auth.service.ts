@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isDemoSeedEnabled } from '../../common/demo';
 
 export interface UserSession {
   id: string;
@@ -32,7 +33,9 @@ export class AuthService {
   }
 
   private loadOrSeedUsers() {
-    this.seedDemoUsers();
+    if (isDemoSeedEnabled()) {
+      this.seedDemoUsers();
+    }
     const storedUsers = this.prismaService.getUsers();
     if (Array.isArray(storedUsers) && storedUsers.length > 0) {
       for (const u of storedUsers) {
@@ -91,7 +94,10 @@ export class AuthService {
       expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes validity
     });
 
-    this.logger.log(`[SMS OTP] Sent to ${cleaned}: ${otp}`);
+    // shortcut: OTP is not delivered by SMS yet, wire SMS_ENDPOINT once the owner picks a gateway
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log(`[SMS OTP] Sent to ${cleaned}: ${otp}`);
+    }
 
     return {
       success: true,
@@ -112,22 +118,26 @@ export class AuthService {
     const cleaned = phoneNumber.replace(/[^0-9]/g, '');
     const entry = this.otpStore.get(cleaned);
 
-    // Development bypass allows '123456'
-    if (!entry && otp !== '123456') {
-      throw new BadRequestException('ওটিপি এর মেয়াদ শেষ বা ভুল হয়েছে। আবার চেষ্টা করুন।');
+    // Development bypass allows '123456'; production requires the stored, unexpired OTP
+    const devBypass = process.env.NODE_ENV !== 'production' && otp === '123456';
+    if (!devBypass) {
+      if (!entry || entry.expiresAt < Date.now()) {
+        throw new BadRequestException('ওটিপি এর মেয়াদ শেষ বা ভুল হয়েছে। আবার চেষ্টা করুন।');
+      }
+      if (entry.otp !== otp) {
+        throw new BadRequestException('ভুল ওটিপি কোড।');
+      }
     }
-
-    if (entry && entry.otp !== otp && otp !== '123456') {
-      throw new BadRequestException('ভুল ওটিপি কোড।');
-    }
+    this.otpStore.delete(cleaned); // single use
 
     let user = this.users.get(cleaned);
     if (!user) {
+      const safeRole = role === 'DRIVER' ? 'DRIVER' : 'PASSENGER';
       user = {
         id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
         phoneNumber: cleaned,
-        fullName: fullName || (role === 'DRIVER' ? 'নতুন চালক' : 'নতুন যাত্রী'),
-        role,
+        fullName: fullName || (safeRole === 'DRIVER' ? 'নতুন চালক' : 'নতুন যাত্রী'),
+        role: safeRole,
       };
       this.users.set(cleaned, user);
       this.persistUsers();

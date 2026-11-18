@@ -11,10 +11,11 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { RidesService, OnlineDriver } from './rides.service';
 import { WalletService } from '../wallet/wallet.service';
+import { isAdminKeyValid } from '../../common/admin-key.guard';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim()) : '*',
   },
 })
 export class RidesGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -53,6 +54,9 @@ export class RidesGateway implements OnGatewayConnection, OnGatewayDisconnect {
    */
   @SubscribeMessage('admin:subscribe')
   handleAdminSubscribe(@ConnectedSocket() client: Socket) {
+    if (!isAdminKeyValid(client.handshake.auth?.adminKey)) {
+      return { success: false, error: 'unauthorized' };
+    }
     client.join('admin:dashboard');
     this.logger.log(`Admin dashboard subscribed: ${client.id}`);
 

@@ -1,21 +1,37 @@
 /** @type {import('tailwindcss').Config} */
+// Colors are CSS variables (RGB channels) defined in src/index.css, so opacity modifiers like bg-brand/10 work.
+const v = (name) => `rgb(var(--${name}) / <alpha-value>)`;
+
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // Touch screens: don't leave hover styles stuck after a tap.
+  future: { hoverOnlyWhenSupported: true },
   theme: {
     extend: {
       colors: {
-        canvas: '#0B131E',
-        card: '#111C2D',
-        cardHover: '#16243A',
-        emeraldBd: '#006A4E',
-        emeraldVibrant: '#10B981',
-        crimsonBd: '#F42A41',
-        bkash: '#E2136E',
-        bidAmber: '#F59E0B',
+        page: v('page'),
+        surface: v('surface'),
+        raised: v('raised'),
+        line: v('line'),
+        ink: v('ink'),
+        'ink-2': v('ink-2'),
+        'ink-3': v('ink-3'),
+        brand: v('brand'),
+        'on-brand': v('on-brand'),
+        'brand-text': v('brand-text'),
+        danger: v('danger'),
+        warning: v('warning'),
+        bkash: v('bkash'),
+        easybike: v('easybike'),
+        cng: v('cng'),
+        bike: v('bike'),
+        microbus: v('microbus'),
       },
       fontFamily: {
-        sans: ['"Inter"', '"Hind Siliguri"', 'system-ui', 'sans-serif'],
-        bangla: ['"Hind Siliguri"', '"Inter"', 'sans-serif'],
+        sans: ['Geist', '"Hind Siliguri"', 'system-ui', 'sans-serif'],
+        bangla: ['"Hind Siliguri"', 'Geist', 'sans-serif'],
+        // Geist Mono has no Bangla glyphs (৳, ০-৯), so Hind Siliguri catches them.
+        mono: ['"Geist Mono"', '"Hind Siliguri"', 'ui-monospace', 'monospace'],
       },
     },
   },

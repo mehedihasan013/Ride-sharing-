@@ -61,7 +61,7 @@ class DriverSocketService extends ChangeNotifier {
   DriverSocketService({
     required this.apiService,
     required this.voiceService,
-    this.serverUrl = 'http://localhost:4000',
+    this.serverUrl = kApiUrl,
   }) {
     _initialize();
   }

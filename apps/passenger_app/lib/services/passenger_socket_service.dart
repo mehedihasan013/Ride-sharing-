@@ -5,7 +5,7 @@ import '../models/passenger_models.dart';
 import 'passenger_api_service.dart';
 
 /// Real-time Socket.io client & state manager for the CholoBhairab Passenger App.
-/// Connects to `http://localhost:4000` (or `http://10.0.2.2:4000` on Android emulator)
+/// Connects to `apiService.baseUrl` (`kApiUrl`, or `http://10.0.2.2:4000` on Android emulator)
 /// and includes a seamless built-in demo simulator when offline or when no live driver responds.
 class PassengerSocketService extends ChangeNotifier {
   final PassengerApiService apiService;

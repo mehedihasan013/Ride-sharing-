@@ -1,17 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import {
-  Volume2,
-  VolumeX,
-  Zap,
-  Wifi,
-  WifiOff,
-  Smartphone,
-  UserCheck,
-  Lock,
-  Activity,
-  RotateCcw,
-} from 'lucide-react';
+import { Play, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 import {
   ActiveRideSession,
   BaseFareEstimate,
@@ -28,7 +17,7 @@ import {
 import { PassengerPhone } from './components/PassengerPhone';
 import { DriverPhone, BkashExecutedPayload } from './components/DriverPhone';
 
-const API_BASE = 'http://localhost:4000';
+import { API_BASE } from './config';
 
 const INITIAL_TRANSACTIONS: Record<string, WalletTransaction[]> = {
   driver_demo_1: [
@@ -72,9 +61,12 @@ export function App() {
   // Backend connection & audio state
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [lastSocketEvent, setLastSocketEvent] = useState<string>(
-    'Ready • Dual-Phone Socket.io Bridge Active',
-  );
+  const [eventLog, setEventLog] = useState<{ id: number; at: Date; text: string }[]>(() => [
+    { id: 0, at: new Date(), text: 'Simulator ready' },
+  ]);
+  // Only touches the stable state setter, so the stale copy captured by the socket effect stays correct.
+  const setLastSocketEvent = (text: string) =>
+    setEventLog((prev) => [{ id: Date.now() + Math.random(), at: new Date(), text }, ...prev].slice(0, 60));
   const [autoDemoRunning, setAutoDemoRunning] = useState<boolean>(false);
 
   // Passenger Phone State
@@ -163,7 +155,7 @@ export function App() {
       .catch(() => {});
   }, [pickup, dropoff, selectedVehicle]);
 
-  // Connect Passenger & Driver Sockets to localhost:4000
+  // Connect passenger and driver sockets to API_BASE
   useEffect(() => {
     const riderSocket = io(API_BASE, {
       transports: ['websocket', 'polling'],
@@ -179,19 +171,19 @@ export function App() {
 
     riderSocket.on('connect', () => {
       setBackendConnected(true);
-      setLastSocketEvent('🟢 Connected to NestJS Socket.io Gateway (localhost:4000)');
+      setLastSocketEvent(`Connected to ${API_BASE}`);
     });
 
     riderSocket.on('disconnect', () => {
       setBackendConnected(false);
-      setLastSocketEvent('🟠 Offline Fallback Mode (Local Dual-Phone Sync Active)');
+      setLastSocketEvent('Disconnected, phones now sync locally');
     });
 
     // Passenger receives ride:created confirmation from backend
     riderSocket.on(
       'ride:created',
       (data: { rideId: string; status: string; initialOfferFare: number; liveTrackingToken: string }) => {
-        setLastSocketEvent(`📡 (ride:created) Ride ${data.rideId} broadcasted to Bhairab fleet`);
+        setLastSocketEvent(`ride:created ${data.rideId} sent to nearby drivers`);
         setActiveRide((prev) =>
           prev
             ? {
@@ -218,7 +210,7 @@ export function App() {
         etaMinutes: number;
       }) => {
         setLastSocketEvent(
-          `💬 (ride:new_bid) ${data.driverName} counter-bid ৳${data.bidAmount} (ETA ${data.etaMinutes}m)`,
+          `ride:new_bid ${data.driverName} ৳${data.bidAmount}, ETA ${data.etaMinutes} min`,
         );
         setActiveRide((prev) => {
           if (!prev) return prev;
@@ -258,7 +250,7 @@ export function App() {
         etaMinutes: number;
       }) => {
         setLastSocketEvent(
-          `🤝 (ride:driver_assigned) Matched with ${data.driverName} at ৳${data.agreedFare}`,
+          `ride:driver_assigned ${data.driverName} at ৳${data.agreedFare}`,
         );
       },
     );
@@ -273,7 +265,7 @@ export function App() {
 
     // Passenger receives ride completion
     riderSocket.on('ride:completed', (data: { rideId: string; totalFare: number }) => {
-      setLastSocketEvent(`✅ (ride:completed) Trip completed! Cash paid: ৳${data.totalFare}`);
+      setLastSocketEvent(`ride:completed cash paid ৳${data.totalFare}`);
     });
 
     // Driver receives ride opportunity with Bangla voice alert
@@ -287,13 +279,13 @@ export function App() {
         initialOfferFare: number;
         audioPromptBangla: string;
       }) => {
-        setLastSocketEvent(`🔔 (driver:ride_opportunity) Voice Alert: "${data.audioPromptBangla}"`);
+        setLastSocketEvent(`driver:ride_opportunity voice alert "${data.audioPromptBangla}"`);
       },
     );
 
     // Driver receives bid won notification
     driverSocket.on('driver:bid_won', (data: { rideId: string; agreedFare: number; messageBangla: string }) => {
-      setLastSocketEvent(`🎉 (driver:bid_won) ${data.messageBangla} (৳${data.agreedFare})`);
+      setLastSocketEvent(`driver:bid_won ${data.messageBangla} (৳${data.agreedFare})`);
     });
 
     // Driver receives ride summary after completion
@@ -301,7 +293,7 @@ export function App() {
       'driver:ride_summary',
       (data: { rideId: string; cashCollected: number; commissionDeductedBdt: number }) => {
         setLastSocketEvent(
-          `💰 (driver:ride_summary) Cash ৳${data.cashCollected} | 8% Commission -৳${data.commissionDeductedBdt}`,
+          `driver:ride_summary cash ৳${data.cashCollected}, 8% commission −৳${data.commissionDeductedBdt}`,
         );
       },
     );
@@ -309,7 +301,7 @@ export function App() {
     // Driver receives backend error (e.g., < 50 BDT wallet lockout)
     driverSocket.on('driver:error', (data: { message: string }) => {
       setDriverErrorBanner(data.message);
-      setLastSocketEvent(`🔒 (driver:error) ${data.message}`);
+      setLastSocketEvent(`driver:error ${data.message}`);
     });
 
     return () => {
@@ -371,9 +363,9 @@ export function App() {
       setDriverLandmark(lm);
       setDriverPos({ lat: lm.latitude, lng: lm.longitude });
       setLastSocketEvent(
-        `👤 Switched Driver Phone to ${target.driverName} (Balance: ৳${
+        `Driver phone switched to ${target.driverName}, balance ৳${
           driverBalances[target.driverId] ?? target.walletBalance
-        })`,
+        }`,
       );
     }
   };
@@ -407,7 +399,7 @@ export function App() {
 
     setActiveRide(newSession);
     setLastSocketEvent(
-      `⚡ (rider:request_ride) ${pickup.banglaName} → ${dropoff.banglaName} (Offer: ৳${offerFare})`,
+      `rider:request_ride ${pickup.banglaName} → ${dropoff.banglaName}, offer ৳${offerFare}`,
     );
 
     // Speak Bangla Voice Alert aloud on Driver Phone!
@@ -438,7 +430,7 @@ export function App() {
     if (currentDriverBalance < 50) {
       const lockoutMsg = 'কম ব্যালেন্স! বিড করতে নূন্যতম ৫০ টাকা ওয়ালেট ব্যালেন্স প্রয়োজন';
       setDriverErrorBanner(lockoutMsg);
-      setLastSocketEvent(`🔒 [driver:submit_bid REJECTED] ${lockoutMsg}`);
+      setLastSocketEvent(`driver:submit_bid rejected: ${lockoutMsg}`);
       speakBanglaVoicePrompt(lockoutMsg, isMutedRef.current);
 
       if (driverSocketRef.current?.connected) {
@@ -476,7 +468,7 @@ export function App() {
     });
 
     setLastSocketEvent(
-      `💬 (driver:submit_bid) ${activePersona.driverName} submitted bid ৳${bidAmount} (ETA 3 mins)`,
+      `driver:submit_bid ${activePersona.driverName} ৳${bidAmount}, ETA 3 min`,
     );
 
     if (driverSocketRef.current?.connected) {
@@ -514,7 +506,7 @@ export function App() {
     const confirmVoice = 'রাইড কনফার্ম হয়েছে! যাত্রীর কাছে রওয়ানা হন।';
     speakBanglaVoicePrompt(confirmVoice, isMutedRef.current);
     setLastSocketEvent(
-      `🤝 (rider:accept_bid) Passenger accepted ${bid.driverName}'s bid of ৳${bid.bidAmount}`,
+      `rider:accept_bid ${bid.driverName} at ৳${bid.bidAmount}`,
     );
 
     if (riderSocketRef.current?.connected) {
@@ -539,7 +531,7 @@ export function App() {
       prev ? { ...prev, driverLat: nextLat, driverLng: nextLng } : prev,
     );
     setLastSocketEvent(
-      `📍 (driver:update_location) Streaming GPS [${nextLat}, ${nextLng}] → Passenger Mini-Map`,
+      `driver:update_location ${nextLat}, ${nextLng}`,
     );
 
     if (driverSocketRef.current?.connected) {
@@ -609,7 +601,7 @@ export function App() {
     const summaryVoice = `ভ্রমণ সম্পন্ন হয়েছে। নগদ গ্রহণ করুন ${finalFare} টাকা। ৮ শতাংশ কমিশন বাবদ ${commission} টাকা কর্তন করা হয়েছে।`;
     speakBanglaVoicePrompt(summaryVoice, isMutedRef.current);
     setLastSocketEvent(
-      `💰 (driver:complete_ride) Cash Collected: ৳${finalFare} | 8% Commission Deducted: -৳${commission}`,
+      `driver:complete_ride cash ৳${finalFare}, 8% commission −৳${commission}`,
     );
 
     if (driverSocketRef.current?.connected) {
@@ -657,7 +649,7 @@ export function App() {
       }));
       setDriverErrorBanner(null);
       setLastSocketEvent(
-        `💳 [POST /payments/bkash/execute] TrxID ${bkashExecuted.trxID} (+৳${amountBdt}) → New Balance: ৳${nextBal}`,
+        `POST /payments/bkash/execute TrxID ${bkashExecuted.trxID}, +৳${amountBdt}, balance ৳${nextBal}`,
       );
       speakBanglaVoicePrompt(
         `বিকাশ রিচার্জ সফল হয়েছে ${amountBdt} টাকা। আপনার বর্তমান ব্যালেন্স ${nextBal} টাকা।`,
@@ -690,7 +682,7 @@ export function App() {
         }
         setDriverErrorBanner(null);
         setLastSocketEvent(
-          `💳 [POST /admin/wallet/topup] +৳${amountBdt} via ${method} → New Balance: ৳${data.wallet.currentBalance}`,
+          `POST /admin/wallet/topup +৳${amountBdt} via ${method}, balance ৳${data.wallet.currentBalance}`,
         );
         speakBanglaVoicePrompt(
           `${method === 'NAGAD' ? 'নগদ' : 'বিকাশ'} রিচার্জ সফল হয়েছে ${amountBdt} টাকা। আপনার বর্তমান ব্যালেন্স ${data.wallet.currentBalance} টাকা।`,
@@ -726,7 +718,7 @@ export function App() {
     }));
     setDriverErrorBanner(null);
     setLastSocketEvent(
-      `💳 [Wallet Top-Up] +৳${amountBdt} via ${method} (${trxId}) → New Balance: ৳${nextBal}`,
+      `Wallet top-up (offline) +৳${amountBdt} via ${method} ${trxId}, balance ৳${nextBal}`,
     );
     speakBanglaVoicePrompt(
       `বিকাশ রিচার্জ সফল হয়েছে ${amountBdt} টাকা। আপনার বর্তমান ব্যালেন্স ${nextBal} টাকা।`,
@@ -763,8 +755,8 @@ export function App() {
 
     setLastSocketEvent(
       nextSosState
-        ? `🚨 [POST /rides/${targetRideId}/sos] 999 Emergency Alert sent to Bhairab Control Room!`
-        : `✓ [SOS Resolved] Emergency alert cleared`,
+        ? `POST /rides/${targetRideId}/sos SOS sent to control room`
+        : `SOS resolved`,
     );
 
     if (nextSosState) {
@@ -783,7 +775,7 @@ export function App() {
     vehicleModel: string;
   }) => {
     setLastSocketEvent(
-      `📋 [POST /auth/driver/kyc] Submitted Ward Councilor Cert & NID for ${activePersona.driverName}`,
+      `POST /auth/driver/kyc NID and ward certificate for ${activePersona.driverName}`,
     );
     try {
       await fetch(`${API_BASE}/auth/driver/kyc`, {
@@ -845,7 +837,7 @@ export function App() {
     };
     setActiveRide(initialSession);
     speakBanglaVoicePrompt(audioPrompt, isMutedRef.current);
-    setLastSocketEvent('⚡ [Auto-Demo 1/4] Passenger requested Easy-Bike (৳80) → Driver Voice Alert');
+    setLastSocketEvent('Demo 1/4: passenger requests an easy-bike at ৳80');
 
     // Also trigger backend simulation so Admin Dashboard on 5173 sees live activity too
     fetch(`${API_BASE}/admin/simulate-ride`, { method: 'POST' }).catch(() => {});
@@ -867,7 +859,7 @@ export function App() {
       setActiveRide((prev) =>
         prev ? { ...prev, status: 'BIDDING', bids: [demoBid] } : prev,
       );
-      setLastSocketEvent('💬 [Auto-Demo 2/4] Driver counter-bid ৳90 (+৳10) popped up on Passenger Phone');
+      setLastSocketEvent('Demo 2/4: driver counter-bids ৳90');
 
       // Step 3 (3.2s): Passenger Accepts 90 BDT Bid
       setTimeout(() => {
@@ -888,7 +880,7 @@ export function App() {
               }
             : prev,
         );
-        setLastSocketEvent('🤝 [Auto-Demo 3/4] Passenger accepted ৳90 bid → Driver En Route');
+        setLastSocketEvent('Demo 3/4: passenger accepts ৳90, driver on the way');
 
         // Step 4 (4.6s): Stream GPS halfway to Meghna Bridge
         setTimeout(() => {
@@ -898,7 +890,7 @@ export function App() {
           setActiveRide((prev) =>
             prev ? { ...prev, driverLat: midLat, driverLng: midLng } : prev,
           );
-          setLastSocketEvent('📍 [Auto-Demo 3.5/4] Driver streaming live GPS along Dhaka-Sylhet Highway');
+          setLastSocketEvent('Demo: driver location halfway along the highway');
         }, 1200);
 
         // Step 5 (6.2s): Driver Completes Ride & 8% Commission (-7 BDT) is deducted
@@ -947,7 +939,7 @@ export function App() {
               : prev,
           );
           setLastSocketEvent(
-            '✅ [Auto-Demo 4/4] Trip Completed! Cash Collected: ৳90 | 8% Commission Deducted: -৳7',
+            'Demo 4/4: trip complete, cash ৳90, 8% commission −৳7',
           );
           setAutoDemoRunning(false);
         }, 2800);
@@ -955,152 +947,42 @@ export function App() {
     }, 1600);
   };
 
+  const handleResetSimulator = () => {
+    setActiveRide(null);
+    setDriverErrorBanner(null);
+    setLastCommissionSummary(null);
+    setLastSocketEvent('Simulator reset');
+  };
+
+  const controlBtn =
+    'h-10 px-3 rounded-md border border-line bg-surface text-ink text-[14px] font-medium flex items-center justify-center gap-2 hover:bg-raised transition-colors duration-150 ease-out';
+  const timeFmt = (d: Date) => d.toLocaleTimeString('en-GB', { hour12: false });
+
   return (
-    <div className="min-h-screen bg-[#070D15] text-slate-100 flex flex-col">
-      {/* TOP SIMULATOR CONTROL BAR */}
-      <header className="sticky top-0 z-50 bg-[#0B131E]/95 backdrop-blur-md border-b border-slate-800/90 px-4 py-2.5 shadow-lg">
-        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* Left: Simulator Brand Title & Live Socket Badge */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#006A4E] to-[#10B981] flex items-center justify-center shadow-md shadow-emerald-950/60">
-              <Smartphone className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="font-bangla font-bold text-sm md:text-base text-white tracking-tight flex items-center gap-2">
-                <span>চলো ভৈরব মোবাইল অ্যাপ সিমুলেটর</span>
-                <span className="hidden sm:inline text-slate-500">•</span>
-                <span className="hidden sm:inline text-xs font-sans font-semibold text-emerald-400">
-                  CholoBhairab Dual Mobile App Lab (Passenger + Driver Live Sync)
-                </span>
-              </h1>
-              <div className="flex items-center gap-2 text-[11px]">
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${
-                    backendConnected
-                      ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                  }`}
-                >
-                  {backendConnected ? (
-                    <>
-                      <Wifi className="w-3 h-3 text-emerald-400" />
-                      <span>🟢 Connected to localhost:4000</span>
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff className="w-3 h-3 text-amber-400" />
-                      <span>Fallback Mode (Dual-Phone Sync)</span>
-                    </>
-                  )}
-                </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold bg-[#E2136E]/15 text-pink-300 border border-[#E2136E]/35 text-[10px]">
-                  🗄️ Supabase Postgres + bKash Tokenized API: ACTIVE
-                </span>
-                <span className="text-slate-400 font-mono text-[10px] hidden lg:inline truncate max-w-[380px]">
-                  {lastSocketEvent}
-                </span>
-              </div>
-            </div>
+    <div className="min-h-screen bg-page text-ink">
+      <header className="border-b border-line bg-surface">
+        <div className="max-w-[1400px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-[20px] font-semibold font-bangla">চলো ভৈরব অ্যাপ সিমুলেটর</h1>
+            <p className="text-[13px] text-ink-2 font-bangla">
+              বাঁয়ে যাত্রী, ডানে চালক। দুটো ফোন একই সার্ভারের সকেট ইভেন্টে চলে।
+            </p>
           </div>
-
-          {/* Right: Driver Persona Switcher + Auto-Demo Handshake + Mute Toggle */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Driver Persona Switcher Pills */}
-            <div className="flex items-center bg-[#070D15] p-1 rounded-xl border border-slate-800">
-              <button
-                type="button"
-                onClick={() => handleSwitchPersona('driver_demo_1')}
-                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bangla font-bold flex items-center gap-1.5 transition-all ${
-                  selectedPersonaId === 'driver_demo_1'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>মোঃ রফিকুল ইসলাম (Easy-Bike • ৳{driverBalances.driver_demo_1 ?? 193})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSwitchPersona('driver_demo_4')}
-                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bangla font-bold flex items-center gap-1.5 transition-all ${
-                  selectedPersonaId === 'driver_demo_4'
-                    ? 'bg-rose-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-rose-300'
-                }`}
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>
-                  আনোয়ার মিয়া (Easy-Bike • ৳{driverBalances.driver_demo_4 ?? 35}{' '}
-                  {(driverBalances.driver_demo_4 ?? 35) < 50 ? 'Locked Out Demo!' : 'Unlocked!'})
-                </span>
-              </button>
-            </div>
-
-            {/* Quick Auto-Demo Full Handshake Button */}
-            <button
-              type="button"
-              disabled={autoDemoRunning}
-              onClick={handleRunAutoDemoHandshake}
-              className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 text-slate-950 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all disabled:opacity-60"
-            >
-              <Zap className="w-3.5 h-3.5 fill-slate-950" />
-              <span>
-                {autoDemoRunning ? '⚡ Handshake Running...' : '⚡ Auto-Demo Full Handshake'}
-              </span>
-            </button>
-
-            {/* Reset Ride State Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveRide(null);
-                setDriverErrorBanner(null);
-                setLastCommissionSummary(null);
-                setLastSocketEvent('🔄 Simulator reset to idle state');
-              }}
-              title="Reset Simulator State"
-              className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-
-            {/* Audio Mute/Unmute Toggle */}
-            <button
-              type="button"
-              onClick={() => setIsMuted((m) => !m)}
-              title={isMuted ? 'Unmute Bangla Voice Alerts' : 'Mute Bangla Voice Alerts'}
-              className={`px-2.5 py-2 rounded-xl border text-xs font-bangla font-semibold flex items-center gap-1 transition-all ${
-                isMuted
-                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
-                  : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-              }`}
-            >
-              {isMuted ? (
-                <>
-                  <VolumeX className="w-4 h-4" />
-                  <span className="hidden md:inline">মিউট</span>
-                </>
-              ) : (
-                <>
-                  <Volume2 className="w-4 h-4" />
-                  <span className="hidden md:inline">বাংলা ভয়েস চালু</span>
-                </>
-              )}
-            </button>
-          </div>
+          <p className="flex items-center gap-2 text-[13px]" role="status">
+            <span
+              className={`w-2 h-2 rounded-full ${backendConnected ? 'bg-brand' : 'bg-warning'}`}
+              aria-hidden
+            />
+            <span className="font-medium">{backendConnected ? 'Connected' : 'Offline'}</span>
+            <span className="font-mono text-ink-3">{API_BASE}</span>
+            {!backendConnected && <span className="text-ink-3">· phones sync locally</span>}
+          </p>
         </div>
       </header>
 
-      {/* MAIN DUAL-PHONE SIDE-BY-SIDE WORKSPACE CANVAS */}
-      <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 py-5 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 xl:gap-10">
-        {/* LEFT PHONE: PASSENGER APP */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex items-center gap-2 text-xs font-bangla text-emerald-300 bg-emerald-950/50 border border-emerald-500/30 px-3 py-1 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>বাম ফোন: চলো ভৈরব যাত্রী অ্যাপ (Passenger App)</span>
-          </div>
-
+      <main className="max-w-[1400px] mx-auto px-6 py-6 flex flex-wrap justify-center items-start gap-8">
+        <section className="flex flex-col items-center gap-3" aria-label="যাত্রী অ্যাপ">
+          <h2 className="text-[13px] text-ink-2 font-bangla">যাত্রী অ্যাপ</h2>
           <PassengerPhone
             pickup={pickup}
             dropoff={dropoff}
@@ -1133,38 +1015,10 @@ export function App() {
             driverLng={driverPos.lng}
             driverName={activePersona.driverName}
           />
-        </div>
+        </section>
 
-        {/* CENTER REAL-TIME TELEMETRY PILL (DESKTOP) */}
-        <div className="hidden xl:flex flex-col items-center justify-center self-center w-52 space-y-3 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-[#111C2D] border border-slate-700 flex items-center justify-center shadow-lg">
-            <Activity className="w-6 h-6 text-emerald-400 animate-pulse" />
-          </div>
-          <div className="font-bangla space-y-1">
-            <div className="text-xs font-bold text-white">লাইভ সকেট সিঙ্ক ব্রিজ</div>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              যাত্রী ফোনে রিকোয়েস্ট পাঠালে তাৎক্ষণিক ডানপাশের চালক ফোনে বাংলা ভয়েস অ্যালার্ট ও পাল্টা বিড অপশন চালু হয়।
-            </p>
-          </div>
-          <div className="w-full bg-[#111C2D] border border-slate-800 rounded-2xl p-2.5 text-[10px] font-mono text-emerald-300 break-words">
-            {lastSocketEvent}
-          </div>
-          <div className="w-full bg-[#111C2D]/70 border border-slate-800/80 rounded-xl p-2.5 text-left font-bangla text-[10px] text-slate-300 space-y-1">
-            <div className="font-bold text-amber-300">পরীক্ষার নির্দেশিকা:</div>
-            <div>১. বাম ফোনে রাইড রিকোয়েস্ট পাঠান</div>
-            <div>২. ডান ফোনে +৳১০ (৳৯০) পাল্টা বিড দিন</div>
-            <div>৩. বাম ফোনে বিড গ্রহণ করুন</div>
-            <div>৪. ডান ফোনে ট্রিপ সম্পন্ন ও ৮% কমিশন দেখুন!</div>
-          </div>
-        </div>
-
-        {/* RIGHT PHONE: DRIVER APP */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex items-center gap-2 text-xs font-bangla text-amber-300 bg-amber-950/50 border border-amber-500/30 px-3 py-1 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            <span>ডান ফোন: চলো ভৈরব চালক অ্যাপ (Driver App • {activePersona.driverName})</span>
-          </div>
-
+        <section className="flex flex-col items-center gap-3" aria-label="চালক অ্যাপ">
+          <h2 className="text-[13px] text-ink-2 font-bangla">চালক অ্যাপ · {activePersona.driverName}</h2>
           <DriverPhone
             persona={activePersona}
             isOnline={isDriverOnline}
@@ -1187,7 +1041,86 @@ export function App() {
             lastCommissionSummary={lastCommissionSummary}
             onDismissSummary={() => setLastCommissionSummary(null)}
           />
-        </div>
+        </section>
+
+        <aside className="w-full max-w-[340px] xl:mt-8 rounded-lg border border-line bg-surface divide-y divide-line font-bangla">
+          <div className="p-4 space-y-3">
+            <h2 className="text-[14px] font-semibold">ডেমো</h2>
+            <button
+              type="button"
+              disabled={autoDemoRunning}
+              onClick={handleRunAutoDemoHandshake}
+              className="h-10 w-full rounded-md bg-brand text-on-brand text-[14px] font-medium flex items-center justify-center gap-2 transition-opacity duration-150 ease-out disabled:opacity-60"
+            >
+              <Play className="w-4 h-4" aria-hidden />
+              {autoDemoRunning ? 'ডেমো চলছে…' : 'পুরো রাইড স্বয়ংক্রিয়ভাবে চালান'}
+            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={handleResetSimulator} className={controlBtn}>
+                <RotateCcw className="w-4 h-4" aria-hidden />
+                রিসেট
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsMuted((m) => !m)}
+                aria-pressed={!isMuted}
+                className={controlBtn}
+              >
+                {isMuted ? <VolumeX className="w-4 h-4" aria-hidden /> : <Volume2 className="w-4 h-4" aria-hidden />}
+                {isMuted ? 'ভয়েস বন্ধ' : 'ভয়েস চালু'}
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-2">
+            <h2 className="text-[14px] font-semibold">
+              চালক
+            </h2>
+            {DRIVER_PERSONAS.map((p) => {
+              const balance = driverBalances[p.driverId] ?? p.walletBalance;
+              const selected = selectedPersonaId === p.driverId;
+              return (
+                <button
+                  key={p.driverId}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => handleSwitchPersona(p.driverId)}
+                  className={`w-full min-h-[40px] px-3 py-2 rounded-md border text-left flex items-center justify-between gap-3 transition-colors duration-150 ease-out ${
+                    selected ? 'border-brand bg-brand/10' : 'border-line hover:bg-raised'
+                  }`}
+                >
+                  <span className="text-[14px] font-medium truncate">{p.driverName}</span>
+                  <span className="flex items-center gap-2 shrink-0 text-[13px]">
+                    {balance < 50 && <span className="text-warning">কম ব্যালেন্স</span>}
+                    <span className="font-mono tabular-nums text-ink-2">৳{balance}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="p-4">
+            <h2 className="text-[14px] font-semibold mb-2">কীভাবে পরীক্ষা করবেন</h2>
+            <ol className="list-decimal pl-5 space-y-1 text-[13px] text-ink-2">
+              <li>যাত্রী ফোনে রাইডের অনুরোধ পাঠান</li>
+              <li>চালক ফোনে ৳৯০ পাল্টা প্রস্তাব দিন</li>
+              <li>যাত্রী ফোনে প্রস্তাব গ্রহণ করুন</li>
+              <li>চালক ফোনে ট্রিপ শেষ করে ৮% কমিশন দেখুন</li>
+            </ol>
+          </div>
+
+          <div className="p-4">
+            <h2 className="text-[14px] font-semibold mb-2">ইভেন্ট লগ</h2>
+            <ol className="max-h-[320px] overflow-y-auto phone-scroll space-y-1 font-sans" aria-live="polite">
+              {eventLog.map((e) => (
+                <li key={e.id} className="flex gap-3 text-[12px] leading-5">
+                  <time className="font-mono tabular-nums text-ink-3 shrink-0">{timeFmt(e.at)}</time>
+                  <span className="text-ink-2 break-words min-w-0">{e.text}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </aside>
       </main>
     </div>
   );

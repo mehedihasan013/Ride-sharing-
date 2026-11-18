@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { ActiveRide, BhairabLandmarkData, OnlineDriver, VehicleType } from '../types/admin';
-import { Compass, Layers, Navigation, ShieldAlert } from 'lucide-react';
+import { Crosshair, Layers } from 'lucide-react';
 
 interface BhairabMapProps {
   landmarks: BhairabLandmarkData[];
@@ -12,39 +12,49 @@ interface BhairabMapProps {
   onSelectDriverForTopup?: (driverId: string) => void;
 }
 
-const VEHICLE_META: Record<
-  VehicleType,
-  { emoji: string; labelBn: string; labelEn: string; color: string; bgHex: string }
-> = {
-  EASYBIKE: {
-    emoji: '🛺',
-    labelBn: 'ইজিবাইক',
-    labelEn: 'Easy-Bike',
-    color: '#10B981',
-    bgHex: 'rgba(16, 185, 129, 0.18)',
-  },
-  CNG: {
-    emoji: '🛺',
-    labelBn: 'সিএনজি',
-    labelEn: 'CNG Auto',
-    color: '#06B6D4',
-    bgHex: 'rgba(6, 182, 212, 0.18)',
-  },
-  BIKE: {
-    emoji: '🏍️',
-    labelBn: 'বাইক',
-    labelEn: 'Motorbike',
-    color: '#F59E0B',
-    bgHex: 'rgba(245, 158, 11, 0.18)',
-  },
-  CAR_MICROBUS: {
-    emoji: '🚐',
-    labelBn: 'মাইক্রোবাস',
-    labelEn: 'Microbus',
-    color: '#A855F7',
-    bgHex: 'rgba(168, 85, 247, 0.18)',
-  },
+// Shared by the admin views: one label and one identity colour per vehicle type.
+export const VEHICLE_META: Record<VehicleType, { label: string; token: string; dot: string }> = {
+  EASYBIKE: { label: 'ইজিবাইক', token: 'easybike', dot: 'bg-easybike' },
+  CNG: { label: 'সিএনজি', token: 'cng', dot: 'bg-cng' },
+  BIKE: { label: 'বাইক', token: 'bike', dot: 'bg-bike' },
+  CAR_MICROBUS: { label: 'মাইক্রোবাস', token: 'microbus', dot: 'bg-microbus' },
 };
+
+export const RIDE_STATUS_LABEL: Record<ActiveRide['status'], string> = {
+  SEARCHING: 'চালক খুঁজছে',
+  BIDDING: 'দর কষাকষি',
+  ACCEPTED: 'গৃহীত',
+  ARRIVING: 'চালক আসছেন',
+  IN_PROGRESS: 'চলছে',
+  COMPLETED: 'সম্পন্ন',
+  CANCELLED: 'বাতিল',
+};
+
+export const VehicleLabel: React.FC<{ type: VehicleType }> = ({ type }) => {
+  const meta = VEHICLE_META[type] || VEHICLE_META.EASYBIKE;
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span className={`h-2 w-2 rounded-full ${meta.dot}`} aria-hidden />
+      {meta.label}
+    </span>
+  );
+};
+
+const BHAIRAB_CENTER: L.LatLngExpression = [24.0487, 90.9852];
+const MONO = "'Geist Mono', ui-monospace, monospace";
+
+// shortcut: OSM's public tiles are for light use only; move to Barikoi or a paid tile provider before real traffic
+const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+// Inline styles can use var(); SVG stroke attributes (polylines) cannot, so resolve the token.
+const tokenColor = (name: string) =>
+  `rgb(${getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim()})`;
+
+// Popup HTML is built from server data; escape it.
+const esc = (value: unknown) =>
+  String(value ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export const BhairabMap: React.FC<BhairabMapProps> = ({
   landmarks,
@@ -59,30 +69,24 @@ export const BhairabMap: React.FC<BhairabMapProps> = ({
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const [mapTheme, setMapTheme] = useState<'dark' | 'osm'>('dark');
 
-  // Initialize Leaflet Map once
+  // Initialize Leaflet map once
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
     const map = L.map(mapContainerRef.current, {
-      center: [24.0487, 90.9852], // Bhairab Railway Junction center
+      center: BHAIRAB_CENTER,
       zoom: 14,
       zoomControl: true,
     });
 
-    const darkTiles = L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      {
-        attribution: '&copy; OpenStreetMap &copy; CARTO | CholoBhairab GIS',
-        subdomains: 'abcd',
-        maxZoom: 19,
-      }
-    ).addTo(map);
-
-    const layerGroup = L.layerGroup().addTo(map);
+    // Attribution stays visible (OSM tile licence). Dark look comes from the .map-dark CSS filter.
+    tileLayerRef.current = L.tileLayer(OSM_TILES, {
+      attribution: OSM_ATTRIBUTION,
+      maxZoom: 19,
+    }).addTo(map);
 
     mapInstanceRef.current = map;
-    tileLayerRef.current = darkTiles;
-    markersLayerRef.current = layerGroup;
+    markersLayerRef.current = L.layerGroup().addTo(map);
 
     setTimeout(() => {
       map.invalidateSize();
@@ -94,156 +98,94 @@ export const BhairabMap: React.FC<BhairabMapProps> = ({
     };
   }, []);
 
-  // Switch tile theme between Dark Matter and Standard OSM
+  // Toggle via classList: a changing React className would wipe the classes Leaflet adds to the container.
   useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    if (tileLayerRef.current) {
-      map.removeLayer(tileLayerRef.current);
-    }
-
-    const url =
-      mapTheme === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-    tileLayerRef.current = L.tileLayer(url, {
-      attribution: '&copy; OpenStreetMap contributors | CholoBhairab GIS',
-      maxZoom: 19,
-    }).addTo(map);
+    mapContainerRef.current?.classList.toggle('map-dark', mapTheme === 'dark');
   }, [mapTheme]);
 
-  // Render Landmarks, Online Drivers, and Active Ride Polylines
+  // Landmarks, ride routes and online drivers
   useEffect(() => {
     const layerGroup = markersLayerRef.current;
     if (!layerGroup) return;
 
     layerGroup.clearLayers();
 
-    // 1. Render 6 Bhairab Landmarks
+    // 1. Landmarks: neutral labels, they are reference points
     landmarks.forEach((lm) => {
-      const iconHtml = `
-        <div style="
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          background: rgba(11, 19, 30, 0.92);
-          border: 1px solid rgba(16, 185, 129, 0.45);
-          padding: 3px 8px;
-          border-radius: 999px;
-          color: #A7F3D0;
-          font-size: 11px;
-          font-weight: 600;
-          white-space: nowrap;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.6);
-        ">
-          <span style="width: 7px; height: 7px; border-radius: 50%; background: #10B981; display: inline-block;"></span>
-          <span>${lm.banglaName.split('(')[0].trim()}</span>
-        </div>
-      `;
-
-      const customIcon = L.divIcon({
-        html: iconHtml,
+      const name = esc(lm.banglaName.split('(')[0].trim());
+      const icon = L.divIcon({
+        html: `<div style="display:flex;justify-content:center;"><div style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:9999px;background:rgb(var(--surface) / 0.92);border:1px solid rgb(var(--line));color:rgb(var(--ink-2));font-size:12px;font-weight:500;white-space:nowrap;"><span style="width:6px;height:6px;border-radius:9999px;background:rgb(var(--ink-3));"></span>${name}</div></div>`,
         className: 'bhairab-landmark-pin',
-        iconSize: [140, 26],
-        iconAnchor: [70, 13],
+        iconSize: [160, 24],
+        iconAnchor: [80, 12],
       });
 
-      const marker = L.marker([lm.latitude, lm.longitude], { icon: customIcon });
-      marker.bindPopup(`
-        <div style="min-width: 210px; padding: 2px;">
-          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #10B981; font-weight: 700;">
-            📍 ভৈরব ল্যান্ডমার্ক হাব • ${lm.category.toUpperCase()}
-          </div>
-          <div style="font-size: 14px; font-weight: 700; color: #F8FAFC; margin-top: 3px;">
-            ${lm.banglaName}
-          </div>
-          <div style="font-size: 11px; color: #94A3B8; margin-bottom: 6px;">
-            ${lm.englishName}
-          </div>
-          <div style="font-size: 11px; color: #CBD5E1; background: rgba(255,255,255,0.05); padding: 6px; border-radius: 6px;">
-            ${lm.descriptionBangla}
-          </div>
-          <div style="font-size: 10px; color: #64748B; margin-top: 6px; font-family: monospace;">
-            GPS: ${lm.latitude.toFixed(4)}° N, ${lm.longitude.toFixed(4)}° E
-          </div>
-        </div>
-      `);
-      marker.addTo(layerGroup);
+      L.marker([lm.latitude, lm.longitude], { icon, title: lm.banglaName })
+        .bindPopup(
+          `<div style="min-width:200px;">
+            <div style="font-size:14px;font-weight:600;color:rgb(var(--ink));">${esc(lm.banglaName)}</div>
+            <div style="font-size:12px;line-height:1.5;color:rgb(var(--ink-2));margin-top:4px;">${esc(lm.descriptionBangla)}</div>
+            <div style="font-family:${MONO};font-size:12px;color:rgb(var(--ink-3));margin-top:8px;">${lm.latitude.toFixed(4)}, ${lm.longitude.toFixed(4)}</div>
+          </div>`
+        )
+        .addTo(layerGroup);
     });
 
-    // 2. Render Active Ride Polylines & Pickup/Dropoff Markers
+    // 2. Ride routes with a fare label at pickup
     activeRides
       .filter((r) => r.status !== 'CANCELLED')
       .forEach((ride) => {
         const isSos = Boolean(ride.sosActive);
-        const lineColor = isSos
-          ? '#F42A41'
+        const token = isSos
+          ? 'danger'
           : ride.status === 'ACCEPTED' || ride.status === 'IN_PROGRESS'
-          ? '#10B981'
-          : '#F59E0B';
+          ? 'brand-text'
+          : 'warning';
+        const fare = ride.finalAgreedFare || ride.initialOfferFare;
+        const statusText = isSos ? 'SOS সক্রিয়' : RIDE_STATUS_LABEL[ride.status] || ride.status;
 
-        const polyline = L.polyline(
+        L.polyline(
           [
             [ride.pickupLat, ride.pickupLng],
             [ride.dropoffLat, ride.dropoffLng],
           ],
           {
-            color: lineColor,
+            color: tokenColor(token),
             weight: isSos ? 4 : 3,
-            dashArray: '8, 8',
+            dashArray: isSos ? undefined : '6, 6',
             opacity: 0.9,
           }
-        );
+        )
+          .bindPopup(
+            `<div style="min-width:220px;">
+              <div style="font-size:12px;font-weight:500;color:rgb(var(--${token}));">${esc(statusText)}</div>
+              <div style="font-size:14px;font-weight:600;color:rgb(var(--ink));margin-top:4px;">${esc(ride.passengerName)}</div>
+              <div style="font-size:12px;line-height:1.5;color:rgb(var(--ink-2));margin-top:4px;">${esc(ride.pickupAddress)} &rarr; ${esc(ride.dropoffAddress)}</div>
+              <div style="font-family:${MONO};font-size:12px;color:rgb(var(--ink));margin-top:8px;">প্রস্তাব ৳${ride.initialOfferFare}${
+                ride.finalAgreedFare ? ` · চূড়ান্ত ৳${ride.finalAgreedFare}` : ''
+              }</div>
+            </div>`
+          )
+          .addTo(layerGroup);
 
-        polyline.bindPopup(`
-          <div style="min-width: 220px;">
-            <div style="font-size: 11px; font-weight: 700; color: ${lineColor};">
-              ${isSos ? '🚨 999 SOS জরুরি সতর্কতা!' : `⚡ সক্রিয় ট্রিপ (${ride.status})`}
-            </div>
-            <div style="font-size: 13px; font-weight: 700; color: #F8FAFC; margin-top: 3px;">
-              যাত্রী: ${ride.passengerName}
-            </div>
-            <div style="font-size: 11px; color: #CBD5E1; margin-top: 4px;">
-              🟢 পিকআপ: ${ride.pickupAddress}<br/>
-              🏁 গন্তব্য: ${ride.dropoffAddress}
-            </div>
-            <div style="font-size: 12px; font-weight: 700; color: #F59E0B; margin-top: 6px;">
-              প্রস্তাবিত ভাড়া: ৳${ride.initialOfferFare} ${
-          ride.finalAgreedFare ? `• চূড়ান্ত: ৳${ride.finalAgreedFare}` : ''
-        }
-            </div>
-          </div>
-        `);
-        polyline.addTo(layerGroup);
+        const pillStyle = isSos
+          ? 'background:rgb(var(--danger));color:rgb(var(--on-brand));'
+          : `background:rgb(var(--surface));color:rgb(var(--ink));border:1px solid rgb(var(--${token}));`;
 
-        // Pickup badge
         const pickupIcon = L.divIcon({
-          html: `
-            <div class="${isSos ? 'pulse-sos' : 'pulse-emerald'}" style="
-              background: ${isSos ? '#F42A41' : '#006A4E'};
-              border: 2px solid #FFFFFF;
-              color: #FFFFFF;
-              padding: 3px 8px;
-              border-radius: 999px;
-              font-size: 11px;
-              font-weight: 700;
-              white-space: nowrap;
-              box-shadow: 0 4px 14px rgba(0,0,0,0.65);
-            ">
-              ${isSos ? '🚨 SOS' : '🙋 পিকআপ'} • ৳${ride.finalAgreedFare || ride.initialOfferFare}
-            </div>
-          `,
+          html: `<div style="display:flex;justify-content:center;"><div class="${isSos ? 'pulse-sos' : ''}" style="${pillStyle}padding:1px 8px;border-radius:9999px;font-family:${MONO};font-size:12px;font-weight:500;white-space:nowrap;">${isSos ? 'SOS ' : ''}৳${fare}</div></div>`,
           className: 'ride-pickup-marker',
-          iconSize: [110, 26],
-          iconAnchor: [55, 28],
+          iconSize: [100, 22],
+          iconAnchor: [50, 24],
         });
 
-        L.marker([ride.pickupLat, ride.pickupLng], { icon: pickupIcon }).addTo(layerGroup);
+        L.marker([ride.pickupLat, ride.pickupLng], {
+          icon: pickupIcon,
+          title: `${ride.passengerName}: ${statusText}`,
+        }).addTo(layerGroup);
       });
 
-    // 3. Render Online Drivers with Vehicle Type Badges
+    // 3. Online drivers: small dot in the vehicle colour, danger ring when bidding is locked
     const filteredDrivers =
       selectedVehicleFilter === 'ALL'
         ? drivers
@@ -252,175 +194,123 @@ export const BhairabMap: React.FC<BhairabMapProps> = ({
     filteredDrivers.forEach((driver) => {
       const meta = VEHICLE_META[driver.vehicleType] || VEHICLE_META.EASYBIKE;
       const isLowBalance = driver.walletBalance < 50;
-      const borderColor = isLowBalance ? '#F42A41' : meta.color;
 
-      // Slight offset so driver marker sits neatly beside landmark pin
+      // Slight offset so the driver dot does not cover a landmark label
       const latOffset = driver.lat + 0.0014;
       const lngOffset = driver.lng + 0.0012;
 
-      const driverHtml = `
-        <div style="
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          background: #111C2D;
-          border: 2px solid ${borderColor};
-          padding: 4px 10px;
-          border-radius: 999px;
-          color: #F8FAFC;
-          font-size: 11px;
-          font-weight: 700;
-          white-space: nowrap;
-          box-shadow: 0 6px 16px rgba(0,0,0,0.75);
-        ">
-          <span style="font-size: 14px;">${meta.emoji}</span>
-          <span>${meta.labelBn}</span>
-          <span style="
-            background: ${isLowBalance ? 'rgba(244,42,65,0.25)' : 'rgba(16,185,129,0.2)'};
-            color: ${isLowBalance ? '#FCA5A5' : '#6EE7B7'};
-            padding: 1px 5px;
-            border-radius: 6px;
-            font-size: 10px;
-          ">
-            ${isLowBalance ? '🔒' : ''}৳${driver.walletBalance}
-          </span>
-        </div>
-      `;
-
       const driverIcon = L.divIcon({
-        html: driverHtml,
+        html: `<span style="display:block;width:10px;height:10px;border-radius:9999px;background:rgb(var(--${meta.token}));border:2px solid rgb(var(--page));${
+          isLowBalance ? 'box-shadow:0 0 0 2px rgb(var(--danger));' : ''
+        }"></span>`,
         className: 'bhairab-driver-marker',
-        iconSize: [145, 30],
-        iconAnchor: [72, 15],
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
       });
 
-      const dMarker = L.marker([latOffset, lngOffset], { icon: driverIcon });
-      dMarker.bindPopup(`
-        <div style="min-width: 225px; padding: 2px;">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-size: 11px; font-weight: 700; color: ${meta.color};">
-              ${meta.emoji} ${meta.labelBn} • ${meta.labelEn}
-            </span>
-            <span style="font-size: 11px; color: #FBBF24; font-weight: 700;">★ ${driver.rating}</span>
-          </div>
-          <div style="font-size: 14px; font-weight: 700; color: #FFFFFF; margin-top: 4px;">
-            ${driver.driverName}
-          </div>
-          <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">
-            📞 ${driver.driverPhone} • ${driver.vehicleModel}
-          </div>
-          <div style="
-            margin-top: 8px;
-            padding: 6px 8px;
-            border-radius: 8px;
-            background: ${isLowBalance ? 'rgba(244, 42, 65, 0.16)' : 'rgba(16, 185, 129, 0.14)'};
-            border: 1px solid ${isLowBalance ? 'rgba(244, 42, 65, 0.4)' : 'rgba(16, 185, 129, 0.3)'};
-            font-size: 11px;
-            color: ${isLowBalance ? '#FECACA' : '#A7F3D0'};
-            font-weight: 600;
-          ">
-            ওয়ালেট ব্যালেন্স: ৳${driver.walletBalance} BDT
-            ${isLowBalance ? '<br/>🔒 বিডিং লকড (নূন্যতম ৫০ টাকা প্রয়োজন)' : ' • ✓ বিডিং সক্রিয়'}
-          </div>
-        </div>
-      `);
-      dMarker.addTo(layerGroup);
+      L.marker([latOffset, lngOffset], { icon: driverIcon, title: driver.driverName })
+        .bindPopup(
+          `<div style="min-width:200px;">
+            <div style="font-size:14px;font-weight:600;color:rgb(var(--ink));">${esc(driver.driverName)}</div>
+            <div style="font-size:12px;color:rgb(var(--ink-2));margin-top:2px;">${meta.label} · ${esc(driver.vehicleModel)} · রেটিং ${driver.rating}</div>
+            <div style="font-family:${MONO};font-size:12px;color:rgb(var(--ink-2));margin-top:2px;">${esc(driver.driverPhone)}</div>
+            <div style="font-family:${MONO};font-size:13px;font-weight:500;margin-top:8px;color:rgb(var(--${isLowBalance ? 'danger' : 'ink'}));">ব্যালেন্স ৳${driver.walletBalance}</div>
+            <div style="font-size:12px;margin-top:2px;color:rgb(var(--${isLowBalance ? 'danger' : 'ink-3'}));">${
+              isLowBalance ? 'বিড বন্ধ: ন্যূনতম ৳৫০ লাগবে' : 'বিড করতে পারবেন'
+            }</div>
+          </div>`
+        )
+        .addTo(layerGroup);
     });
   }, [landmarks, drivers, activeRides, selectedVehicleFilter]);
 
   const handleRecenter = () => {
     if (mapInstanceRef.current) {
-      mapInstanceRef.current.setView([24.0487, 90.9852], 14, { animate: true });
+      mapInstanceRef.current.setView(BHAIRAB_CENTER, 14, { animate: true });
     }
   };
 
-  return (
-    <div className="glass-card rounded-2xl overflow-hidden flex flex-col border border-white/10">
-      {/* Map Top Controls Bar */}
-      <div className="px-4 py-3 bg-[#0E1726] border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <Navigation className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <span>ভৈরব লাইভ জিআইএস রাডার ম্যাপ</span>
-              <span className="text-xs font-normal text-slate-400">• Bhairab Live Telemetry Radar</span>
-            </h3>
-            <p className="text-[11px] text-slate-400">
-              রেলওয়ে জংশন, মেঘনা সেতু, কাচারি মোড় ও পুরাতন নদী ঘাট (24.0487°N, 90.9852°E)
-            </p>
-          </div>
-        </div>
+  const countFor = (id: VehicleType | 'ALL') =>
+    id === 'ALL' ? drivers.length : drivers.filter((d) => d.vehicleType === id).length;
 
-        {/* Vehicle Filter Pills + Map Actions */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {(
-            [
-              { id: 'ALL', label: 'সব যান (All)', emoji: '🛰️' },
-              { id: 'EASYBIKE', label: 'ইজিবাইক', emoji: '🛺' },
-              { id: 'CNG', label: 'সিএনজি', emoji: '🛺' },
-              { id: 'BIKE', label: 'বাইক', emoji: '🏍️' },
-              { id: 'CAR_MICROBUS', label: 'মাইক্রোবাস', emoji: '🚐' },
-            ] as const
-          ).map((tab) => {
-            const active = selectedVehicleFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onSelectVehicleFilter(tab.id)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
-                  active
-                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-lg shadow-emerald-500/20'
-                    : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 border border-white/5'
-                }`}
-              >
-                <span>{tab.emoji}</span>
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+  const filters: { id: VehicleType | 'ALL'; label: string }[] = [
+    { id: 'ALL', label: 'সব' },
+    ...(Object.keys(VEHICLE_META) as VehicleType[]).map((id) => ({
+      id,
+      label: VEHICLE_META[id].label,
+    })),
+  ];
+
+  const controlCls =
+    'h-8 px-2.5 rounded-md text-[13px] flex items-center gap-1.5 transition-colors duration-150 ease-out';
+
+  return (
+    <section className="bg-surface border border-line rounded-lg overflow-hidden" aria-label="লাইভ ম্যাপ">
+      <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-ink">লাইভ ম্যাপ</h3>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-0.5 p-0.5 rounded-md border border-line" role="group" aria-label="যানবাহন ফিল্টার">
+            {filters.map((f) => {
+              const active = selectedVehicleFilter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onSelectVehicleFilter(f.id)}
+                  className={`${controlCls} h-7 px-2 ${
+                    active ? 'bg-raised text-ink' : 'text-ink-2 hover:text-ink hover:bg-raised'
+                  }`}
+                >
+                  {f.id !== 'ALL' && (
+                    <span className={`h-2 w-2 rounded-full ${VEHICLE_META[f.id].dot}`} aria-hidden />
+                  )}
+                  <span>{f.label}</span>
+                  <span className="font-mono tabular-nums text-xs text-ink-3">{countFor(f.id)}</span>
+                </button>
+              );
+            })}
+          </div>
 
           <button
+            type="button"
             onClick={() => setMapTheme((prev) => (prev === 'dark' ? 'osm' : 'dark'))}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1"
-            title="Switch Radar / Street Map"
+            className={`${controlCls} border border-line text-ink-2 hover:text-ink hover:bg-raised`}
           >
-            <Layers className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{mapTheme === 'dark' ? 'স্ট্রিট ম্যাপ' : 'ডার্ক রাডার'}</span>
+            <Layers className="w-4 h-4" aria-hidden />
+            <span>{mapTheme === 'dark' ? 'স্ট্রিট ম্যাপ' : 'ডার্ক ম্যাপ'}</span>
           </button>
 
           <button
+            type="button"
             onClick={handleRecenter}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800/90 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 flex items-center gap-1"
-            title="Recenter on Bhairab Junction"
+            className={`${controlCls} border border-line text-ink-2 hover:text-ink hover:bg-raised`}
           >
-            <Compass className="w-3.5 h-3.5" />
+            <Crosshair className="w-4 h-4" aria-hidden />
             <span>ভৈরব কেন্দ্র</span>
           </button>
         </div>
       </div>
 
-      {/* Interactive Map Canvas */}
-      <div className="relative w-full h-[430px] bg-[#080E17]">
-        <div ref={mapContainerRef} className="w-full h-full z-0" />
+      <div className="relative w-full h-[430px] bg-page">
+        <div ref={mapContainerRef} className="w-full h-full z-0 map-dark" />
 
-        {/* Map Legend Overlay */}
-        <div className="absolute bottom-3 left-3 z-[400] bg-[#0B131E]/90 backdrop-blur-md border border-white/10 rounded-xl px-3 py-2 text-[11px] flex flex-wrap items-center gap-3 shadow-xl">
-          <span className="flex items-center gap-1.5 text-emerald-300 font-medium">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span>
-            ৬টি ল্যান্ডমার্ক হাব
+        <div className="absolute bottom-3 left-3 z-[400] bg-surface border border-line rounded-md shadow-lg px-3 py-2 text-xs text-ink-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-ink-3" aria-hidden />
+            ল্যান্ডমার্ক
           </span>
-          <span className="flex items-center gap-1.5 text-amber-300 font-medium">
-            <span className="w-4 border-t-2 border-dashed border-amber-400 inline-block"></span>
-            চলমান বিডিং রুট
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 border-t-2 border-dashed border-warning" aria-hidden />
+            দর কষাকষি চলছে
           </span>
-          <span className="flex items-center gap-1.5 text-rose-300 font-medium">
-            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-            <span>🔒 &lt; ৫০৳ লকড ড্রাইভার</span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-ink-2 ring-2 ring-danger" aria-hidden />
+            ব্যালেন্স ৳৫০-এর নিচে
           </span>
         </div>
       </div>
-    </div>
+    </section>
   );
 };

@@ -2,43 +2,83 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Rider and driver apps: light, because they are used outdoors in daylight. */
+:root {
+  color-scheme: light;
+  --page: 246 245 242;     /* #F6F5F2 */
+  --surface: 255 255 255;
+  --raised: 239 237 232;   /* #EFEDE8 */
+  --line: 222 219 211;     /* #DEDBD3 */
+  --ink: 22 24 26;         /* #16181A */
+  --ink-2: 77 83 88;       /* #4D5358 */
+  --ink-3: 108 114 120;    /* #6C7278, 5:1 on white */
+  --brand: 0 106 78;       /* #006A4E Bangladesh green */
+  --on-brand: 255 255 255;
+  --brand-text: 0 106 78;
+  --danger: 210 38 56;     /* #D22638 SOS and blocking errors only */
+  --warning: 168 98 0;     /* #A86200 bids, low balance */
+  --bkash: 210 16 101;     /* #D21065 bKash surfaces only */
+  --easybike: 0 128 92;
+  --cng: 168 98 0;
+  --bike: 37 99 199;
+  --microbus: 109 77 214;
+}
+
 @layer base {
   body {
-    font-family: 'Inter', 'Hind Siliguri', system-ui, sans-serif;
-    background-color: #070D15;
-    color: #F8FAFC;
+    background-color: rgb(var(--page));
+    color: rgb(var(--ink));
+    font-family: Geist, 'Hind Siliguri', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--brand));
+    outline-offset: 2px;
   }
 }
 
 .font-bangla {
-  font-family: 'Hind Siliguri', 'Inter', sans-serif;
+  font-family: 'Hind Siliguri', Geist, sans-serif;
 }
 
-/* Custom sleek scrollbars inside phone viewports */
 .phone-scroll::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
 }
-
 .phone-scroll::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.4);
+  background: transparent;
 }
-
 .phone-scroll::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.8);
+  background: rgb(var(--line));
   border-radius: 9999px;
 }
 
-.phone-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(16, 185, 129, 0.6);
-}
-
-/* Leaflet map container overrides for mobile simulator */
 .leaflet-container {
-  background-color: #0B131E !important;
-  font-family: 'Hind Siliguri', 'Inter', sans-serif !important;
+  background-color: rgb(var(--raised)) !important;
+  font-family: 'Hind Siliguri', Geist, sans-serif !important;
+}
+/* Mute the busy OSM tiles so route and markers carry the colour. */
+.leaflet-tile-pane {
+  filter: saturate(0.5) contrast(0.95);
+}
+/* Map tile attribution is a license requirement (OSM), so it stays visible but small. */
+.leaflet-control-attribution {
+  font-size: 9px !important;
+  background: rgb(var(--surface) / 0.8) !important;
 }
 
-.leaflet-control-attribution {
-  display: none !important;
+/* The one pulse that earns its place: an active SOS. */
+@keyframes sos-ring {
+  0% { box-shadow: 0 0 0 0 rgb(var(--danger) / 0.55); }
+  100% { box-shadow: 0 0 0 14px rgb(var(--danger) / 0); }
+}
+.pulse-sos {
+  animation: sos-ring 1.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

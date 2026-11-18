@@ -147,7 +147,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
         this.state.updatedAt = new Date().toISOString();
       }
       const serialized = JSON.stringify(this.state, null, 2);
-      fs.writeFileSync(this.stateFilePath, serialized, 'utf8');
+      // Atomic write: a crash mid-write leaves the old file intact instead of a truncated one
+      const tmpPath = `${this.stateFilePath}.tmp`;
+      fs.writeFileSync(tmpPath, serialized, 'utf8');
+      fs.renameSync(tmpPath, this.stateFilePath);
     } catch (err: any) {
       this.logger.error(`Failed to persist state to disk: ${err?.message}`);
     }

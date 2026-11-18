@@ -6,9 +6,11 @@ import {
   Query,
   Param,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { BkashService } from './bkash.service';
+import { AdminKeyGuard } from '../../common/admin-key.guard';
 
 @Controller('payments/bkash')
 export class PaymentsController {
@@ -106,6 +108,7 @@ export class PaymentsController {
     };
   }
 
+  @UseGuards(AdminKeyGuard)
   @Get('list')
   listPayments() {
     return {

@@ -4,23 +4,10 @@ import {
   WalletRecord,
   WalletTransactionRecord,
 } from '../types/admin';
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Banknote,
-  CheckCircle2,
-  CreditCard,
-  ExternalLink,
-  Gift,
-  Lock,
-  PlusCircle,
-  RefreshCw,
-  ShieldAlert,
-  Sparkles,
-  Wallet,
-} from 'lucide-react';
+import { ExternalLink, LoaderCircle, Lock, X } from 'lucide-react';
+import { VehicleLabel } from '../components/BhairabMap';
 
-const API_BASE = 'http://localhost:4000';
+import { API_BASE } from '../config';
 
 interface TokenizedCheckoutSession {
   driverId: string;
@@ -46,6 +33,19 @@ interface WalletLedgerProps {
   ) => Promise<void>;
   onRefreshOverview?: () => Promise<void>;
 }
+
+const SESSION_STATUS: Record<TokenizedCheckoutSession['status'], { label: string; dot: string }> = {
+  INITIATED: { label: 'পেমেন্টের অপেক্ষায়', dot: 'bg-warning' },
+  EXECUTING: { label: 'প্রক্রিয়াধীন', dot: 'bg-warning' },
+  COMPLETED: { label: 'সম্পন্ন', dot: 'bg-brand-text' },
+};
+
+const TX_TYPE_LABEL: Record<WalletTransactionRecord['type'], string> = {
+  BKASH_TOPUP: 'bKash টপ-আপ',
+  NAGAD_TOPUP: 'Nagad টপ-আপ',
+  COMMISSION_DEDUCTION: 'কমিশন (৮%)',
+  PROMOTIONAL_BONUS: 'বোনাস',
+};
 
 export const WalletLedger: React.FC<WalletLedgerProps> = ({
   drivers,
@@ -212,395 +212,322 @@ export const WalletLedger: React.FC<WalletLedgerProps> = ({
     );
   };
 
+  const isBkash = selectedMethod === 'BKASH';
+  const btn =
+    'h-8 px-2.5 rounded-md text-[13px] whitespace-nowrap flex items-center justify-center gap-1.5 transition-colors duration-150 ease-out disabled:opacity-50 disabled:cursor-not-allowed';
+  const sessionStatus = tokenizedSession ? SESSION_STATUS[tokenizedSession.status] : null;
+
   return (
-    <div className="space-y-6">
-      {/* Top Banner: bKash / Nagad Prepaid Mechanics */}
-      <div className="glass-card rounded-2xl p-5 border border-[#E2136E]/30 bg-gradient-to-r from-[#111C2D] via-[#241227] to-[#111C2D]">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E2136E]/20 border border-[#E2136E]/40 text-pink-300 text-xs font-bold">
-              <Wallet className="w-3.5 h-3.5" />
-              <span>বিকাশ ও নগদ প্রিপেইড ওয়ালেট • 8% Auto-Commission Ledger</span>
-            </div>
-            <h2 className="text-xl font-extrabold text-white">
-              ক্যাশ-ফার্স্ট রাইড ও ৮% স্বয়ংক্রিয় কমিশন ডিডাকশন সিস্টেম
-            </h2>
-            <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
-              ভৈরবে ৯৫% যাত্রী চালককে সরাসরি নগদ টাকা (Cash) পরিশোধ করেন। প্রতি ট্রিপ শেষে চুক্তিকৃত ভাড়ার{' '}
-              <strong className="text-emerald-300">৮% প্ল্যাটফর্ম কমিশন</strong> চালকের প্রিপেইড ওয়ালেট থেকে
-              স্বয়ংক্রিয়ভাবে কেটে নেওয়া হয়। ওয়ালেট ব্যালেন্স{' '}
-              <strong className="text-rose-400">৫০ টাকার নিচে নামলে</strong> চালকের বিডিং সাময়িক লক হয়ে যায়।
-            </p>
-          </div>
-
-          {/* Payment Gateway Selector & KPI Summary */}
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <div className="p-3 rounded-xl bg-[#0B131E]/90 border border-white/10 text-right">
-              <div className="text-[11px] text-slate-400">মোট প্ল্যাটফর্ম কমিশন (৮%)</div>
-              <div className="text-2xl font-extrabold text-emerald-400">
-                ৳{totalCommissionBdt.toLocaleString('en-IN')} BDT
-              </div>
-              <div className="text-[10px] text-slate-400">
-                মোট GMV: ৳{totalGmvBdt.toLocaleString('en-IN')}
-              </div>
-            </div>
-
-            <div className="p-2 rounded-xl bg-[#0B131E]/90 border border-white/10 flex flex-col gap-1.5">
-              <span className="text-[10px] text-slate-400 font-semibold px-1">
-                গেটওয়ে নির্বাচন (Top-Up Gateway):
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setSelectedMethod('BKASH')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
-                    selectedMethod === 'BKASH'
-                      ? 'bg-[#E2136E] text-white shadow-lg shadow-[#E2136E]/30'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  ৳ bKash পেমেন্ট
-                </button>
-                <button
-                  onClick={() => setSelectedMethod('NAGAD')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
-                    selectedMethod === 'NAGAD'
-                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  ৳ Nagad নগদ
-                </button>
-              </div>
-            </div>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-3xl">
+          <h2 className="text-xl font-semibold text-ink">ওয়ালেট ও কমিশন লেজার</h2>
+          <p className="text-[13px] text-ink-2 mt-1">
+            যাত্রীরা ভাড়া নগদে চালককে দেন। প্রতি ট্রিপ শেষে ভাড়ার ৮% কমিশন চালকের প্রিপেইড
+            ওয়ালেট থেকে কাটা হয়। ব্যালেন্স ৳৫০-এর নিচে নামলে চালক নতুন ট্রিপে বিড করতে পারেন না।
+          </p>
         </div>
+        <dl className="flex gap-8">
+          <div>
+            <dt className="text-xs text-ink-3">কমিশন আয়</dt>
+            <dd className="text-xl font-semibold font-mono tabular-nums text-ink mt-0.5">
+              ৳{totalCommissionBdt.toLocaleString('en-IN')}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-ink-3">মোট ভাড়া (GMV)</dt>
+            <dd className="text-xl font-semibold font-mono tabular-nums text-ink mt-0.5">
+              ৳{totalGmvBdt.toLocaleString('en-IN')}
+            </dd>
+          </div>
+        </dl>
       </div>
 
-      {/* Tokenized bKash Checkout Session Banner (shows paymentID, Popup, Execute & trxID) */}
-      {tokenizedSession && (
-        <div className="glass-card rounded-2xl p-4 border-2 border-[#E2136E] bg-gradient-to-r from-[#240B1A] via-[#171225] to-[#111C2D] shadow-xl">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-[#E2136E] text-white text-[11px] font-extrabold">
-                  bKash Tokenized v1.2.0-beta
-                </span>
-                <span className="text-xs font-bold text-pink-200">
-                  চালক: {tokenizedSession.driverName} • পরিমাণ: ৳{tokenizedSession.amountBdt}
-                </span>
-                <span
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
-                    tokenizedSession.status === 'COMPLETED'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  }`}
-                >
-                  {tokenizedSession.status}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-slate-200 pt-1">
-                <span>
-                  paymentID: <strong className="text-white">{tokenizedSession.paymentID}</strong>
-                </span>
-                <span>
-                  invoiceNumber: <strong className="text-pink-300">{tokenizedSession.invoiceNumber}</strong>
-                </span>
-                {tokenizedSession.trxID && (
-                  <span className="text-emerald-300">
-                    trxID: <strong className="text-emerald-200">{tokenizedSession.trxID}</strong>
-                  </span>
-                )}
-              </div>
+      {tokenizedSession && sessionStatus && (
+        <section className="bg-surface border border-bkash/50 rounded-lg p-4 space-y-3" aria-label="bKash চেকআউট">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-ink">
+                bKash চেকআউট · {tokenizedSession.driverName} ·{' '}
+                <span className="font-mono tabular-nums">৳{tokenizedSession.amountBdt}</span>
+              </h3>
+              <p className="mt-1 text-xs text-ink-2 flex items-center gap-1.5" role="status">
+                <span className={`h-1.5 w-1.5 rounded-full ${sessionStatus.dot}`} aria-hidden />
+                {sessionStatus.label}
+              </p>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() =>
-                  window.open(
-                    tokenizedSession.bkashURL,
-                    'bkash_tokenized_checkout',
-                    'width=460,height=720'
-                  )
-                }
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-pink-400/40 text-pink-200 text-xs font-bold flex items-center gap-1.5"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Open Mock Checkout Popup</span>
-              </button>
-
-              {tokenizedSession.status !== 'COMPLETED' && (
-                <button
-                  type="button"
-                  disabled={tokenizedLoading}
-                  onClick={handleExecuteTokenizedCheckout}
-                  className="px-3.5 py-2 rounded-xl bg-[#E2136E] hover:bg-[#c81060] text-white text-xs font-extrabold shadow-lg flex items-center gap-1.5"
-                >
-                  {tokenizedLoading ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  )}
-                  <span>✓ Execute Tokenized Payment (/payments/bkash/execute)</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setTokenizedSession(null)}
-                className="px-2.5 py-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white text-xs font-bold"
-              >
-                ✕
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setTokenizedSession(null)}
+              aria-label="চেকআউট বন্ধ করুন"
+              className="h-8 w-8 rounded-md text-ink-3 hover:text-ink hover:bg-raised flex items-center justify-center transition-colors duration-150 ease-out"
+            >
+              <X className="w-4 h-4" aria-hidden />
+            </button>
           </div>
-        </div>
+
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+            <dt className="text-ink-3">paymentID</dt>
+            <dd className="font-mono text-ink break-all">{tokenizedSession.paymentID}</dd>
+            <dt className="text-ink-3">invoiceNumber</dt>
+            <dd className="font-mono text-ink break-all">{tokenizedSession.invoiceNumber}</dd>
+            {tokenizedSession.trxID && (
+              <>
+                <dt className="text-ink-3">trxID</dt>
+                <dd className="font-mono text-ink break-all">{tokenizedSession.trxID}</dd>
+              </>
+            )}
+          </dl>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                window.open(
+                  tokenizedSession.bkashURL,
+                  'bkash_tokenized_checkout',
+                  'width=460,height=720'
+                )
+              }
+              className={`${btn} border border-line text-ink hover:bg-raised`}
+            >
+              <ExternalLink className="w-3.5 h-3.5" aria-hidden />
+              টেস্ট চেকআউট খুলুন
+            </button>
+
+            {tokenizedSession.status !== 'COMPLETED' && (
+              <button
+                type="button"
+                disabled={tokenizedLoading}
+                onClick={handleExecuteTokenizedCheckout}
+                className={`${btn} px-3 bg-bkash text-on-brand font-medium hover:bg-bkash/90`}
+              >
+                {tokenizedLoading && <LoaderCircle className="w-3.5 h-3.5 animate-spin" aria-hidden />}
+                পেমেন্ট সম্পন্ন করুন
+              </button>
+            )}
+          </div>
+        </section>
       )}
 
-      {/* Driver Wallet Cards Grid */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <span>চালকদের প্রিপেইড ওয়ালেট ব্যালেন্স ও ইনস্ট্যান্ট রিচার্জ</span>
-            <span className="text-xs font-normal text-slate-400">• Driver Prepaid Wallets</span>
+      <section className="bg-surface border border-line rounded-lg" aria-labelledby="wallets-heading">
+        <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-3">
+          <h3 id="wallets-heading" className="text-sm font-semibold text-ink">
+            চালকের ওয়ালেট
           </h3>
-          <span className="text-xs text-rose-400 font-semibold flex items-center gap-1">
-            <ShieldAlert className="w-4 h-4" /> নূন্যতম বিডিং ব্যালেন্স: ৳৫০ টাকা
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {enrichedWallets.map((driver) => {
-            const isLocked = driver.currentBalance < 50;
-            const isLoading = loadingDriverId === driver.driverId;
-            const customVal = customAmounts[driver.driverId] || 150;
-
-            return (
-              <div
-                key={driver.driverId}
-                className={`glass-card rounded-2xl p-5 flex flex-col justify-between transition-all ${
-                  isLocked
-                    ? 'border-2 border-[#F42A41] bg-gradient-to-b from-rose-950/35 to-[#111C2D]'
-                    : 'border border-white/10'
-                }`}
-              >
-                <div>
-                  {/* Top Status Badge */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-800 text-slate-200 border border-white/10">
-                      {driver.vehicleType === 'EASYBIKE' && '🛺 ইজিবাইক'}
-                      {driver.vehicleType === 'CNG' && '🛺 সিএনজি'}
-                      {driver.vehicleType === 'BIKE' && '🏍️ বাইক'}
-                      {driver.vehicleType === 'CAR_MICROBUS' && '🚐 মাইক্রোবাস'}
-                    </span>
-
-                    {isLocked ? (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-[#F42A41]/25 text-rose-200 border border-[#F42A41] flex items-center gap-1 animate-pulse">
-                        <Lock className="w-3 h-3" /> 🔒 বিডিং লকড - নূন্যতম ৫০ টাকা প্রয়োজন
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> বিডিং সক্রিয় (Active)
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Driver Info & Current Balance */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="text-base font-extrabold text-white">{driver.driverName}</h4>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        📞 {driver.driverPhone} • {driver.vehicleModel}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] uppercase tracking-wider text-slate-400 block">
-                        বর্তমান ব্যালেন্স
-                      </span>
-                      <span
-                        className={`text-2xl font-extrabold ${
-                          isLocked ? 'text-[#F42A41]' : 'text-emerald-400'
-                        }`}
-                      >
-                        ৳{driver.currentBalance.toFixed(1)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar relative to 50 BDT minimum */}
-                  <div className="mt-3">
-                    <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          isLocked ? 'bg-[#F42A41]' : 'bg-emerald-500'
-                        }`}
-                        style={{
-                          width: `${Math.min(100, Math.max(10, (driver.currentBalance / 300) * 100))}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Instant Top-Up Controls */}
-                <div className="mt-4 pt-3.5 border-t border-white/10 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-300 font-semibold">
-                      ৳ বিকাশ রিচার্জ (bKash Top-Up):
-                    </span>
-                    <span className="text-[11px] text-pink-400 font-bold">
-                      {selectedMethod === 'BKASH' ? 'bKash মার্চেন্ট' : 'Nagad মার্চেন্ট'}
-                    </span>
-                  </div>
-
-                  {/* Preset Amount Buttons: 100, 200, 500 BDT */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {[100, 200, 500].map((amt) => (
-                      <button
-                        key={amt}
-                        disabled={isLoading}
-                        onClick={() => handlePresetTopup(driver.driverId, amt)}
-                        className="py-2 px-2 rounded-xl bg-[#E2136E]/20 hover:bg-[#E2136E] text-pink-200 hover:text-white border border-[#E2136E]/40 text-xs font-extrabold transition-all flex items-center justify-center gap-1 shadow-sm"
-                      >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        <span>+৳{amt}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Direct Instant Action Button */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={20}
-                      step={50}
-                      value={customVal}
-                      onChange={(e) =>
-                        setCustomAmounts((prev) => ({
-                          ...prev,
-                          [driver.driverId]: Number(e.target.value),
-                        }))
-                      }
-                      className="w-24 px-2.5 py-2 rounded-xl bg-[#0B131E] border border-white/10 text-xs font-bold text-white focus:outline-none focus:border-[#E2136E]"
-                    />
-                    <button
-                      disabled={isLoading}
-                      onClick={() => handlePresetTopup(driver.driverId, customVal)}
-                      className="flex-1 py-2 px-3 rounded-xl bg-[#E2136E] hover:bg-[#c81060] text-white text-xs font-extrabold shadow-lg shadow-[#E2136E]/25 transition-all flex items-center justify-center gap-1.5"
-                    >
-                      {isLoading ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-3.5 h-3.5" />
-                      )}
-                      <span>
-                        ৳ বিকাশ রিচার্জ ({customVal} BDT)
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* bKash Tokenized Checkout Test Flow Button */}
-                  <button
-                    type="button"
-                    disabled={isLoading || tokenizedLoading}
-                    onClick={() =>
-                      handleStartTokenizedCheckout(
-                        driver.driverId,
-                        driver.driverName,
-                        customVal || 200
-                      )
-                    }
-                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#240B1A] to-[#4A1132] hover:from-[#E2136E]/30 hover:to-[#E2136E]/50 text-pink-200 hover:text-white border border-[#E2136E]/50 text-xs font-extrabold transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <CreditCard className="w-3.5 h-3.5 text-pink-400" />
-                    <span>💳 bKash Tokenized Checkout (Test Flow)</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Full Transaction Ledger Table */}
-      <div className="glass-card rounded-2xl overflow-hidden border border-white/10">
-        <div className="px-5 py-4 bg-[#0E1726] border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Banknote className="w-4 h-4 text-emerald-400" />
-              <span>ওয়ালেট লেনদেন ও ৮% কমিশন লেজার (Full Transaction Ledger)</span>
-            </h3>
-            <p className="text-xs text-slate-400">
-              BKASH_TOPUP, COMMISSION_DEDUCTION (8%), এবং PROMOTIONAL_BONUS এর রিয়েল-টাইম হিসাব
-            </p>
-          </div>
-          <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs font-mono">
-            মোট এন্ট্রি: {transactions.length}
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-[#0B131E] text-slate-400 border-b border-white/10 uppercase text-[11px]">
-                <th className="py-3 px-4">লেনদেন আইডি (Trx ID)</th>
-                <th className="py-3 px-4">চালক (Driver)</th>
-                <th className="py-3 px-4">ধরন (Type)</th>
-                <th className="py-3 px-4">বিবরণ (Bangla Note)</th>
-                <th className="py-3 px-4 text-right">পরিমাণ (Amount)</th>
-                <th className="py-3 px-4 text-right">পরবর্তী ব্যালেন্স (Balance After)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {transactions.map((tx) => {
-                const drv = drivers.find((d) => d.driverId === tx.driverId);
-                const isPositive = tx.amount >= 0;
-
+          <div className="flex items-center gap-2 text-xs text-ink-3">
+            <span>রিচার্জ মাধ্যম</span>
+            <div className="flex items-center gap-0.5 p-0.5 rounded-md border border-line" role="group" aria-label="রিচার্জ মাধ্যম">
+              {(
+                [
+                  { id: 'BKASH', label: 'bKash', dot: 'bg-bkash' },
+                  { id: 'NAGAD', label: 'Nagad', dot: 'bg-ink-3' },
+                ] as const
+              ).map((m) => {
+                const active = selectedMethod === m.id;
                 return (
-                  <tr key={tx.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 px-4 font-mono text-slate-300">
-                      <div>{tx.gatewayTrxId || tx.id}</div>
-                      {tx.referenceRideId && (
-                        <div className="text-[10px] text-slate-500">Ride: {tx.referenceRideId}</div>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-white">
-                      {drv ? drv.driverName : tx.driverId}
-                    </td>
-                    <td className="py-3 px-4">
-                      {tx.type === 'BKASH_TOPUP' || tx.type === 'NAGAD_TOPUP' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#E2136E]/20 text-pink-300 border border-[#E2136E]/40 font-bold text-[10px]">
-                          <ArrowUpRight className="w-3 h-3" /> {tx.type}
-                        </span>
-                      ) : tx.type === 'COMMISSION_DEDUCTION' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-[10px]">
-                          <ArrowDownRight className="w-3 h-3" /> COMMISSION (8%)
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-[10px]">
-                          <Gift className="w-3 h-3" /> PROMO_BONUS
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 font-bangla text-slate-200">{tx.noteBangla}</td>
-                    <td
-                      className={`py-3 px-4 text-right font-extrabold text-sm ${
-                        isPositive ? 'text-emerald-400' : 'text-amber-400'
-                      }`}
-                    >
-                      {isPositive ? `+৳${tx.amount}` : `-৳${Math.abs(tx.amount)}`}
-                    </td>
-                    <td className="py-3 px-4 text-right font-bold text-white">
-                      ৳{Number(tx.balanceAfter).toFixed(1)} BDT
-                    </td>
-                  </tr>
+                  <button
+                    key={m.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setSelectedMethod(m.id)}
+                    className={`h-7 px-2.5 rounded-md text-[13px] flex items-center gap-1.5 transition-colors duration-150 ease-out ${
+                      active ? 'bg-raised text-ink' : 'text-ink-2 hover:text-ink hover:bg-raised'
+                    }`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${m.dot}`} aria-hidden />
+                    {m.label}
+                  </button>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
-      </div>
+
+        {enrichedWallets.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-ink-2">
+            কোনো চালক অনলাইনে নেই, তাই রিচার্জ করার মতো ওয়ালেট দেখানো যাচ্ছে না।
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-xs text-ink-3 border-b border-line">
+                  <th className="font-medium px-4 py-2">চালক</th>
+                  <th className="font-medium px-4 py-2">যান</th>
+                  <th className="font-medium px-4 py-2 text-right">ব্যালেন্স</th>
+                  <th className="font-medium px-4 py-2">রিচার্জ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {enrichedWallets.map((driver) => {
+                  const isLocked = driver.currentBalance < 50;
+                  const isLoading = loadingDriverId === driver.driverId;
+                  const customVal = customAmounts[driver.driverId] || 150;
+
+                  return (
+                    <tr key={driver.driverId} className="align-top">
+                      <td className="px-4 py-3">
+                        <div className="text-ink font-medium">{driver.driverName}</div>
+                        <div className="text-xs text-ink-3 font-mono tabular-nums mt-0.5">
+                          {driver.driverPhone}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-ink-2">
+                        <VehicleLabel type={driver.vehicleType} />
+                        <div className="text-xs text-ink-3 mt-0.5">{driver.vehicleModel}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <div
+                          className={`text-base font-mono tabular-nums ${
+                            isLocked ? 'text-danger' : 'text-ink'
+                          }`}
+                        >
+                          ৳{driver.currentBalance.toFixed(1)}
+                        </div>
+                        {isLocked && (
+                          <div className="text-xs text-danger flex items-center justify-end gap-1 mt-0.5">
+                            <Lock className="w-3 h-3" aria-hidden /> বিড বন্ধ
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {[100, 200, 500].map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              disabled={isLoading}
+                              onClick={() => handlePresetTopup(driver.driverId, amt)}
+                              className={`${btn} border border-line text-ink hover:bg-raised font-mono tabular-nums`}
+                            >
+                              +৳{amt}
+                            </button>
+                          ))}
+
+                          <span className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={20}
+                              step={50}
+                              value={customVal}
+                              aria-label={`${driver.driverName}: রিচার্জের পরিমাণ (টাকা)`}
+                              onChange={(e) =>
+                                setCustomAmounts((prev) => ({
+                                  ...prev,
+                                  [driver.driverId]: Number(e.target.value),
+                                }))
+                              }
+                              className="w-20 h-8 px-2 rounded-md bg-page border border-line text-[13px] font-mono tabular-nums text-ink focus:outline-none focus:border-brand-text"
+                            />
+                            <button
+                              type="button"
+                              disabled={isLoading}
+                              onClick={() => handlePresetTopup(driver.driverId, customVal)}
+                              className={`${btn} px-3 font-medium text-on-brand ${
+                                isBkash ? 'bg-bkash hover:bg-bkash/90' : 'bg-brand hover:bg-brand/90'
+                              }`}
+                            >
+                              {isLoading && (
+                                <LoaderCircle className="w-3.5 h-3.5 animate-spin" aria-hidden />
+                              )}
+                              রিচার্জ
+                            </button>
+                          </span>
+
+                          <button
+                            type="button"
+                            disabled={isLoading || tokenizedLoading}
+                            onClick={() =>
+                              handleStartTokenizedCheckout(
+                                driver.driverId,
+                                driver.driverName,
+                                customVal || 200
+                              )
+                            }
+                            className={`${btn} border border-bkash/50 text-ink hover:bg-bkash/10`}
+                          >
+                            bKash চেকআউট
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="bg-surface border border-line rounded-lg" aria-labelledby="ledger-heading">
+        <div className="px-4 py-3 border-b border-line flex items-baseline justify-between gap-2">
+          <h3 id="ledger-heading" className="text-sm font-semibold text-ink">
+            লেনদেন
+          </h3>
+          <span className="text-xs text-ink-3">
+            <span className="font-mono tabular-nums">{transactions.length}</span> টি এন্ট্রি
+          </span>
+        </div>
+
+        {transactions.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-ink-2">
+            এখনো কোনো লেনদেন হয়নি। রিচার্জ বা ট্রিপের কমিশন কাটা হলে এখানে দেখাবে।
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-xs text-ink-3 border-b border-line">
+                  <th className="font-medium px-4 py-2">লেনদেন আইডি</th>
+                  <th className="font-medium px-4 py-2">চালক</th>
+                  <th className="font-medium px-4 py-2">ধরন</th>
+                  <th className="font-medium px-4 py-2">বিবরণ</th>
+                  <th className="font-medium px-4 py-2 text-right">পরিমাণ</th>
+                  <th className="font-medium px-4 py-2 text-right">পরের ব্যালেন্স</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {transactions.map((tx) => {
+                  const drv = drivers.find((d) => d.driverId === tx.driverId);
+                  const isPositive = tx.amount >= 0;
+
+                  return (
+                    <tr key={tx.id} className="hover:bg-raised transition-colors duration-150 ease-out">
+                      <td className="px-4 py-2.5 font-mono text-ink-2 whitespace-nowrap">
+                        <div>{tx.gatewayTrxId || tx.id}</div>
+                        {tx.referenceRideId && (
+                          <div className="text-xs text-ink-3">রাইড {tx.referenceRideId}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-ink">{drv ? drv.driverName : tx.driverId}</td>
+                      <td className="px-4 py-2.5 text-ink-2 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5">
+                          {tx.type === 'BKASH_TOPUP' && (
+                            <span className="h-2 w-2 rounded-full bg-bkash" aria-hidden />
+                          )}
+                          {TX_TYPE_LABEL[tx.type] || tx.type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 font-bangla text-ink-2">{tx.noteBangla}</td>
+                      <td
+                        className={`px-4 py-2.5 text-right font-mono tabular-nums whitespace-nowrap ${
+                          isPositive ? 'text-brand-text' : 'text-ink-2'
+                        }`}
+                      >
+                        {isPositive ? `+৳${tx.amount}` : `−৳${Math.abs(tx.amount)}`}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums text-ink whitespace-nowrap">
+                        ৳{Number(tx.balanceAfter).toFixed(1)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 };

@@ -183,7 +183,7 @@ export const FALLBACK_TRANSACTIONS: WalletTransactionRecord[] = [
     amount: -10,
     balanceAfter: 35.0,
     referenceRideId: 'ride_bhairab_prev_00',
-    noteBangla: 'ট্রিপ কমিশন কর্তন (৮%): ১০ টাকা (ব্যালেন্স ৫০ টাকার নিচে!)',
+    noteBangla: 'ট্রিপ কমিশন কর্তন (৮%): ১০ টাকা (ব্যালেন্স ৫০ টাকার নিচে)',
     createdAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
   },
 ];

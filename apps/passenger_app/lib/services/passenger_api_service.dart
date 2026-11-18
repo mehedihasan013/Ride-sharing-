@@ -4,7 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/passenger_models.dart';
 
-/// REST API client for CholoBhairab backend (`http://localhost:4000` or `http://10.0.2.2:4000`).
+/// Backend base URL; override at build time with --dart-define=API_URL=https://api.example.com
+const String kApiUrl =
+    String.fromEnvironment('API_URL', defaultValue: 'http://localhost:4000');
+
+/// REST API client for CholoBhairab backend (`kApiUrl`, or `http://10.0.2.2:4000` on the Android emulator).
 /// Includes automatic offline fallback so the app works smoothly in any environment.
 class PassengerApiService {
   String _customBaseUrl;
@@ -16,10 +20,13 @@ class PassengerApiService {
     if (_customBaseUrl.isNotEmpty) {
       return _customBaseUrl;
     }
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    // Android emulator reaches the host's localhost via 10.0.2.2, unless API_URL was supplied
+    if (!const bool.hasEnvironment('API_URL') &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:4000';
     }
-    return 'http://localhost:4000';
+    return kApiUrl;
   }
 
   set baseUrl(String url) {

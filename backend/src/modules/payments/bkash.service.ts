@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import axios from 'axios';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isDemoMode } from '../../common/demo';
 import { WalletService, WalletRecord, WalletTransactionRecord } from '../wallet/wallet.service';
 import { RidesService } from '../rides/rides.service';
 import { RidesGateway } from '../rides/rides.gateway';
@@ -177,6 +178,13 @@ export class BkashService {
       );
     }
 
+    if (process.env.NODE_ENV === 'production') {
+      if (!isDemoMode() && (!this.isRealSandboxConfigured() || !process.env.BKASH_CALLBACK_URL)) {
+        throw new BadRequestException('bKash is not configured');
+      }
+      callbackBaseUrl = undefined; // never trust a client-supplied callback host in production
+    }
+
     const invoiceNumber = `INV-CB-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
     const tokenRes = await this.grantToken();
     const idToken = tokenRes.id_token;
@@ -301,6 +309,10 @@ export class BkashService {
         };
       }
 
+      // Mock execute credits a wallet with no real money; a mock record restored from state must not pay out in production
+      if (process.env.NODE_ENV === 'production' && !isDemoMode()) {
+        throw new BadRequestException('bKash is not configured');
+      }
       const trxID = `BKH${Math.floor(1000000 + Math.random() * 9000000)}M`;
       return { trxID };
     } catch (err) {

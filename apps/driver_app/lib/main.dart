@@ -24,21 +24,21 @@ class CholoBhairabDriverApp extends StatelessWidget {
           create: (_) => BanglaVoiceService(),
         ),
         Provider<DriverApiService>(
-          create: (_) => DriverApiService(baseUrl: 'http://localhost:4000'),
+          create: (_) => DriverApiService(baseUrl: kApiUrl),
         ),
         ChangeNotifierProxyProvider2<DriverApiService, BanglaVoiceService,
             DriverSocketService>(
           create: (ctx) => DriverSocketService(
             apiService: ctx.read<DriverApiService>(),
             voiceService: ctx.read<BanglaVoiceService>(),
-            serverUrl: 'http://localhost:4000',
+            serverUrl: kApiUrl,
           ),
           update: (_, api, voice, previous) =>
               previous ??
               DriverSocketService(
                 apiService: api,
                 voiceService: voice,
-                serverUrl: 'http://localhost:4000',
+                serverUrl: kApiUrl,
               ),
         ),
       ],

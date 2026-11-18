@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, NotFoundException } from '@nestjs/common';
 import { WalletService } from './wallet.service';
+import { AdminKeyGuard } from '../../common/admin-key.guard';
 
 @Controller('wallet')
 export class WalletController {
@@ -7,6 +8,10 @@ export class WalletController {
 
   @Get(':driverId')
   getWallet(@Param('driverId') driverId: string) {
+    // A read must not mint a new wallet (with its welcome bonus) for any ID a stranger types.
+    if (process.env.NODE_ENV === 'production' && !this.walletService.hasWallet(driverId)) {
+      throw new NotFoundException('Wallet not found');
+    }
     const wallet = this.walletService.getWallet(driverId);
     const transactions = this.walletService.getDriverTransactions(driverId);
     return {
@@ -16,6 +21,7 @@ export class WalletController {
     };
   }
 
+  @UseGuards(AdminKeyGuard)
   @Post('topup/bkash')
   async topupBkash(
     @Body()

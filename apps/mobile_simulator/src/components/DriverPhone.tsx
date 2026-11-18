@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Radio,
+  Car,
   Wallet,
   FileCheck2,
   Volume2,
@@ -8,15 +8,9 @@ import {
   Lock,
   Navigation,
   CheckCircle2,
-  Sparkles,
   AlertTriangle,
-  ArrowRight,
-  Send,
-  ShieldCheck,
-  Coins,
   ExternalLink,
-  KeyRound,
-  Smartphone,
+  Loader2,
   X,
 } from 'lucide-react';
 import {
@@ -25,9 +19,10 @@ import {
   BhairabLandmark,
   DriverPersona,
   WalletTransaction,
+  calculateHaversineKm,
 } from '../types';
 
-const API_BASE = 'http://localhost:4000';
+import { API_BASE } from '../config';
 
 export interface BkashExecutedPayload {
   paymentID: string;
@@ -74,6 +69,50 @@ interface DriverPhoneProps {
 
 type DriverTab = 'RADAR' | 'WALLET' | 'KYC';
 
+// Shared class strings. Press feedback only; no decorative motion.
+const PRESS = 'transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100';
+const BTN_PRIMARY = `h-14 w-full rounded-md bg-brand text-on-brand text-[16px] font-semibold flex items-center justify-center gap-2 hover:bg-brand/90 ${PRESS}`;
+const BTN_SECONDARY = `h-12 rounded-md border border-line bg-surface text-ink text-[14px] font-medium flex items-center justify-center gap-2 hover:bg-raised ${PRESS}`;
+const BTN_BKASH = `rounded-md bg-bkash text-on-brand font-semibold flex items-center justify-center gap-2 hover:bg-bkash/90 ${PRESS}`;
+const CARD = 'rounded-lg border border-line bg-surface p-4';
+const FIELD = 'h-12 w-full rounded-md border border-line bg-surface px-3 text-[16px] text-ink placeholder:text-ink-3 focus:outline-none focus:border-brand';
+const LABEL = 'block text-[13px] text-ink-2 mb-1';
+const MONO = 'font-mono tabular-nums';
+
+const TX_LABEL: Record<WalletTransaction['type'], string> = {
+  BKASH_TOPUP: 'bKash রিচার্জ',
+  NAGAD_TOPUP: 'Nagad রিচার্জ',
+  COMMISSION_DEDUCTION: 'কমিশন',
+  PROMOTIONAL_BONUS: 'বোনাস',
+};
+
+const km = (a: BhairabLandmark, b: BhairabLandmark) =>
+  calculateHaversineKm(a.latitude, a.longitude, b.latitude, b.longitude).toFixed(1);
+
+const RouteStops: React.FC<{
+  pickup: string;
+  dropoff: string;
+  pickupMeta?: React.ReactNode;
+  dropoffMeta?: React.ReactNode;
+}> = ({ pickup, dropoff, pickupMeta, dropoffMeta }) => (
+  <ol className="space-y-3">
+    <li className="flex gap-3">
+      <span aria-hidden className="mt-1.5 w-2.5 h-2.5 rounded-full bg-brand shrink-0" />
+      <div className="min-w-0">
+        <div className="text-[12px] text-ink-3">পিকআপ{pickupMeta}</div>
+        <div className="text-[16px] font-medium text-ink truncate">{pickup}</div>
+      </div>
+    </li>
+    <li className="flex gap-3">
+      <span aria-hidden className="mt-1.5 w-2.5 h-2.5 rounded-sm bg-ink shrink-0" />
+      <div className="min-w-0">
+        <div className="text-[12px] text-ink-3">গন্তব্য{dropoffMeta}</div>
+        <div className="text-[16px] font-medium text-ink truncate">{dropoff}</div>
+      </div>
+    </li>
+  </ol>
+);
+
 export const DriverPhone: React.FC<DriverPhoneProps> = ({
   persona,
   isOnline,
@@ -115,6 +154,7 @@ export const DriverPhone: React.FC<DriverPhoneProps> = ({
     amountBdt: number;
     prevBalance: number;
     newBalance: number;
+    paidAt: string;
   } | null>(null);
 
   // KYC form state
@@ -136,6 +176,9 @@ export const DriverPhone: React.FC<DriverPhoneProps> = ({
   const isLowBalanceLocked = walletBalance < 50;
 
   const mySubmittedBid = activeRide?.bids.find((b) => b.driverId === persona.driverId);
+
+  const receiptTime = () =>
+    new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   // Step 1: Open bKash Tokenized Checkout & call POST /payments/bkash/create
   const openBkashTokenizedModal = async (amount: number = 200) => {
@@ -221,6 +264,7 @@ export const DriverPhone: React.FC<DriverPhoneProps> = ({
           amountBdt: bkashAmount,
           prevBalance,
           newBalance: newBal,
+          paidAt: receiptTime(),
         });
         setBkashStep('RECEIPT');
         setTopupLoading(false);
@@ -248,6 +292,7 @@ export const DriverPhone: React.FC<DriverPhoneProps> = ({
       amountBdt: bkashAmount,
       prevBalance,
       newBalance: nextBalance,
+      paidAt: receiptTime(),
     });
     setBkashStep('RECEIPT');
     setTopupLoading(false);
@@ -274,948 +319,842 @@ export const DriverPhone: React.FC<DriverPhoneProps> = ({
       brtaLicenseNo: brtaLicense,
       vehicleModel,
     });
-    setKycSubmittedMsg(
-      '✓ আপনার এনআইডি ও পৌরসভা ওয়ার্ড কাউন্সিলর প্রত্যয়নপত্র ভেরিফিকেশনের জন্য জমা হয়েছে!',
-    );
+    setKycSubmittedMsg('এনআইডি ও ওয়ার্ড কাউন্সিলরের প্রত্যয়নপত্র যাচাইয়ের জন্য জমা হয়েছে।');
   };
 
   const baseOffer = activeRide?.initialOfferFare ?? 80;
 
-  return (
-    <div className="w-[390px] h-[820px] rounded-[46px] bg-[#0B131E] border-[7px] border-slate-800 shadow-[0_25px_70px_rgba(0,0,0,0.75)] flex flex-col overflow-hidden relative select-none shrink-0 ring-1 ring-amber-500/20">
-      {/* Smartphone Notch & Status Bar */}
-      <div className="pt-2 pb-1.5 px-6 bg-[#070D15] flex items-center justify-between text-[11px] font-semibold text-slate-300 relative z-20">
-        <span>9:41 AM</span>
-        <div className="w-28 h-5 bg-black rounded-full border border-slate-800/80 flex items-center justify-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-slate-800" />
-          <span className="w-8 h-1 rounded-full bg-slate-800" />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-amber-400 font-bold">4G VoLTE</span>
-          <div className="w-5 h-2.5 border border-slate-400 rounded-sm p-0.5 flex items-center">
-            <div className="w-full h-full bg-amber-400 rounded-[1px]" />
-          </div>
-        </div>
-      </div>
+  const kycApproved = persona.kycStatus === 'APPROVED';
+  const kycStatusLabel = kycSubmittedMsg ? 'জমা হয়েছে' : kycApproved ? 'অনুমোদিত' : 'যাচাই বাকি';
+  const kycDot = kycApproved ? 'bg-brand' : kycSubmittedMsg ? 'bg-ink-3' : 'bg-warning';
 
-      {/* App Brand Header (Driver Mode) */}
-      <div className="px-4 py-2.5 bg-gradient-to-r from-[#1E293B] via-[#111C2D] to-[#0B131E] border-b border-amber-500/25 flex items-center justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-base shrink-0">
-            🛺
-          </div>
+  const tabs: { id: DriverTab; label: string; Icon: typeof Car }[] = [
+    { id: 'RADAR', label: 'ট্রিপ', Icon: Car },
+    { id: 'WALLET', label: 'ওয়ালেট', Icon: Wallet },
+    { id: 'KYC', label: 'কেওয়াইসি', Icon: FileCheck2 },
+  ];
+
+  return (
+    <div className="w-[390px] h-[820px] shrink-0 bg-ink rounded-[44px] p-2">
+      <div className="relative h-full bg-page rounded-[36px] overflow-hidden flex flex-col text-ink">
+        {/* Status bar */}
+        <div className="h-10 px-7 shrink-0 flex items-center justify-between bg-surface font-mono text-[12px] text-ink-2">
+          <span>9:41</span>
+          <span className="flex items-center gap-1.5">
+            <span>4G</span>
+            <span aria-hidden className="w-6 h-3 rounded-[3px] border border-ink-2 p-px">
+              <span className="block h-full w-3/4 rounded-[1px] bg-ink-2" />
+            </span>
+          </span>
+        </div>
+
+        {/* App header: who is driving, and the balance that gates bidding */}
+        <header className="px-4 pb-3 pt-1 shrink-0 flex items-center justify-between gap-3 bg-surface border-b border-line">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h2 className="font-bangla font-bold text-sm text-white truncate">
-                {persona.driverName}
-              </h2>
-              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 shrink-0">
-                DRIVER
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-300 font-bangla truncate">
-              {persona.vehicleModel} • ★ {persona.rating}
+            <h2 className="text-[16px] font-semibold text-ink truncate">{persona.driverName}</h2>
+            <p className="text-[13px] text-ink-2 truncate">
+              {persona.vehicleModel} · রেটিং <span className={MONO}>{persona.rating}</span>
             </p>
           </div>
-        </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('WALLET')}
+            aria-label={`ওয়ালেট ব্যালেন্স ৳${walletBalance}`}
+            className={`h-11 px-3 shrink-0 rounded-md border flex items-center gap-1.5 text-[14px] font-semibold ${MONO} ${PRESS} ${
+              isLowBalanceLocked
+                ? 'border-danger/40 bg-danger/5 text-danger'
+                : 'border-line text-ink hover:bg-raised'
+            }`}
+          >
+            <Wallet className="w-4 h-4" aria-hidden />
+            <span>৳{walletBalance}</span>
+          </button>
+        </header>
 
-        {/* Live Wallet Balance Badge */}
-        <button
-          onClick={() => setActiveTab('WALLET')}
-          className={`px-2.5 py-1 rounded-xl text-xs font-extrabold flex items-center gap-1 border transition-all shrink-0 ${
-            isLowBalanceLocked
-              ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse'
-              : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-          }`}
-        >
-          <Wallet className="w-3.5 h-3.5" />
-          <span>৳{walletBalance}</span>
-        </button>
-      </div>
-
-      {/* Top Segmented Tab Bar */}
-      <div className="grid grid-cols-3 gap-1 p-1.5 bg-[#091019] border-b border-slate-800/80 font-bangla text-[11px]">
-        <button
-          onClick={() => setActiveTab('RADAR')}
-          className={`py-1.5 px-2 rounded-xl font-semibold transition-all flex items-center justify-center gap-1 ${
-            activeTab === 'RADAR'
-              ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <span>১. ট্রিপ রাডার</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('WALLET')}
-          className={`py-1.5 px-2 rounded-xl font-semibold transition-all flex items-center justify-center gap-1 ${
-            activeTab === 'WALLET'
-              ? 'bg-[#E2136E] text-white font-bold shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <span>২. বিকাশ ওয়ালেট</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('KYC')}
-          className={`py-1.5 px-2 rounded-xl font-semibold transition-all flex items-center justify-center gap-1 ${
-            activeTab === 'KYC'
-              ? 'bg-emerald-600 text-white font-bold shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <span>৩. কেওয়াইসি (KYC)</span>
-        </button>
-      </div>
-
-      {/* Scrollable Phone Viewport Body */}
-      <div className="flex-1 overflow-y-auto phone-scroll p-3 space-y-2.5 bg-[#0B131E]">
-        {activeTab === 'RADAR' && (
-          <>
-            {/* Online/Offline Switch + Current Bhairab Landmark Selector */}
-            <div className="bg-[#111C2D] border border-slate-800 rounded-2xl p-2.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      isOnline ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'
-                    }`}
-                  />
-                  <div>
-                    <div className="font-bangla font-bold text-xs text-white">
-                      {isOnline ? 'আপনি এখন অনলাইনে আছেন' : 'আপনি এখন অফলাইনে আছেন'}
+        <main className="flex-1 overflow-y-auto overscroll-contain phone-scroll p-4 space-y-3">
+          {activeTab === 'RADAR' && (
+            <>
+              {/* Online / offline + current stand */}
+              <section className={CARD}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-brand' : 'bg-ink-3'}`}
+                      />
+                      <span className="text-[16px] font-semibold">
+                        {isOnline ? 'অনলাইন' : 'অফলাইন'}
+                      </span>
                     </div>
-                    <div className="text-[10px] font-bangla text-slate-400">
-                      {isOnline
-                        ? 'নতুন রাইড রিকোয়েস্ট ও বাংলা ভয়েস অ্যালার্ট সক্রিয়'
-                        : 'ট্রিপ পেতে অনলাইন সুইচটি চালু করুন'}
-                    </div>
+                    <p className="text-[13px] text-ink-2 mt-0.5">
+                      {isOnline ? 'নতুন ট্রিপ এলে বাংলায় ঘোষণা হবে' : 'ট্রিপ পেতে অনলাইন হোন'}
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={onToggleOnline}
+                    aria-pressed={isOnline}
+                    className={
+                      isOnline
+                        ? `${BTN_SECONDARY} px-4 shrink-0`
+                        : `h-12 px-5 shrink-0 rounded-md bg-brand text-on-brand text-[14px] font-semibold hover:bg-brand/90 ${PRESS}`
+                    }
+                  >
+                    {isOnline ? 'অফলাইন হোন' : 'অনলাইন হোন'}
+                  </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={onToggleOnline}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bangla font-bold transition-all ${
-                    isOnline
-                      ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
-                      : 'bg-slate-800 text-slate-400 border border-slate-700'
-                  }`}
-                >
-                  {isOnline ? '🟢 অনলাইন' : '⚪ অফলাইন'}
-                </button>
-              </div>
-
-              <div className="pt-1.5 border-t border-slate-800/80 flex items-center gap-2">
-                <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <span className="block text-[9px] text-slate-400 font-bangla">
-                    চালকের বর্তমান অবস্থান (Driver GPS Stand)
-                  </span>
+                <div className="mt-4 pt-3 border-t border-line">
+                  <label htmlFor="driver-landmark" className={`${LABEL} flex items-center gap-1.5`}>
+                    <MapPin className="w-4 h-4" aria-hidden />
+                    আপনার অবস্থান
+                  </label>
                   <select
+                    id="driver-landmark"
                     value={currentLandmark.id}
                     onChange={(e) => {
                       const found = BHAIRAB_LANDMARKS.find((l) => l.id === e.target.value);
                       if (found) onChangeDriverLandmark(found);
                     }}
-                    className="w-full bg-transparent text-xs font-bangla font-semibold text-amber-300 focus:outline-none truncate cursor-pointer"
+                    className={`${FIELD} cursor-pointer`}
                   >
                     {BHAIRAB_LANDMARKS.map((l) => (
-                      <option key={l.id} value={l.id} className="bg-[#0B131E] text-white">
+                      <option key={l.id} value={l.id}>
                         {l.banglaName}
                       </option>
                     ))}
                   </select>
                 </div>
-              </div>
-            </div>
+              </section>
 
-            {/* LOW BALANCE LOCKOUT BANNER (< 50 BDT) */}
-            {isLowBalanceLocked && (
-              <div className="bg-gradient-to-br from-rose-950/90 via-[#2A0E17] to-[#111C2D] border-2 border-rose-500 rounded-2xl p-3 space-y-2 shadow-[0_0_25px_rgba(244,42,65,0.25)]">
-                <div className="flex items-start gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-rose-500/20 border border-rose-400/50 flex items-center justify-center shrink-0 mt-0.5">
-                    <Lock className="w-4 h-4 text-rose-400" />
-                  </div>
-                  <div className="font-bangla">
-                    <h3 className="font-bold text-xs text-rose-200">
-                      🔒 কম ব্যালেন্স! বিড করতে নূন্যতম ৫০ টাকা প্রয়োজন
-                    </h3>
-                    <p className="text-[10px] text-rose-200/80 mt-0.5">
-                      আপনার বর্তমান ওয়ালেট ব্যালেন্স মাত্র <strong className="text-white">৳{walletBalance}</strong>। নতুন ট্রিপে বিড করতে এখনই বিকাশ রিচার্জ করুন।
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => openBkashTokenizedModal(100)}
-                    disabled={topupLoading}
-                    className="py-2 px-2.5 rounded-xl bg-[#E2136E] hover:bg-[#c81061] active:scale-95 text-white font-bangla font-bold text-[11px] flex items-center justify-center gap-1 shadow-md transition-all"
-                  >
-                    <span>⚡ +৳১০০ বিকাশ রিচার্জ</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('WALLET')}
-                    className="py-2 px-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-rose-200 border border-rose-500/40 font-bangla font-semibold text-[11px] flex items-center justify-center gap-1"
-                  >
-                    <span>ওয়ালেট ট্যাব দেখুন</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Backend Error Alert (e.g. if driver attempted bid while < 50 BDT) */}
-            {driverErrorBanner && (
-              <div className="bg-rose-950/90 border border-rose-500 rounded-xl p-2.5 flex items-center gap-2 text-xs font-bangla text-rose-200">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>{driverErrorBanner}</span>
-              </div>
-            )}
-
-            {/* 8% Commission Deduction Modal/Card on Ride Completion */}
-            {lastCommissionSummary && (
-              <div className="bg-gradient-to-b from-emerald-950/80 to-[#111C2D] border-2 border-emerald-500 rounded-2xl p-3 space-y-2 shadow-xl">
-                <div className="flex items-center justify-between">
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bangla font-bold">
-                    ✓ ট্রিপ সম্পন্ন ও কমিশন হিসাব
-                  </span>
-                  <button
-                    type="button"
-                    onClick={onDismissSummary}
-                    className="text-[10px] text-slate-400 hover:text-white font-bangla"
-                  >
-                    বন্ধ করুন ✕
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-3 gap-1.5 text-center font-bangla">
-                  <div className="bg-[#0B131E] p-2 rounded-xl border border-slate-800">
-                    <div className="text-[10px] text-slate-400">নগদ গ্রহণ</div>
-                    <div className="text-sm font-extrabold text-emerald-400">
-                      ৳{lastCommissionSummary.cashCollected}
+              {/* Low-balance lockout (< ৳50) */}
+              {isLowBalanceLocked && (
+                <section role="alert" className="rounded-lg border border-danger/40 bg-danger/5 p-4 space-y-3">
+                  <div className="flex gap-3">
+                    <Lock className="w-5 h-5 text-danger shrink-0 mt-0.5" aria-hidden />
+                    <div>
+                      <h3 className="text-[16px] font-semibold text-ink">ব্যালেন্স কম, বিড বন্ধ</h3>
+                      <p className="text-[14px] text-ink-2 mt-0.5">
+                        বিড করতে কমপক্ষে ৳৫০ লাগবে। এখন আছে{' '}
+                        <span className={`${MONO} text-ink font-medium`}>৳{walletBalance}</span>।
+                      </p>
                     </div>
                   </div>
-                  <div className="bg-[#0B131E] p-2 rounded-xl border border-slate-800">
-                    <div className="text-[10px] text-slate-400">৮% কমিশন কর্তন</div>
-                    <div className="text-sm font-extrabold text-amber-400">
-                      -৳{lastCommissionSummary.commissionDeducted}
-                    </div>
-                  </div>
-                  <div className="bg-[#0B131E] p-2 rounded-xl border border-slate-800">
-                    <div className="text-[10px] text-slate-400">নতুন ব্যালেন্স</div>
-                    <div className="text-sm font-extrabold text-white">
-                      ৳{lastCommissionSummary.newBalance}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* INCOMING RIDE OPPORTUNITY & BANGLA VOICE ALERT CARD */}
-            {activeRide && (activeRide.status === 'SEARCHING' || activeRide.status === 'BIDDING') && (
-              <div className="bg-gradient-to-b from-[#17253B] to-[#111C2D] border-2 border-amber-500/70 rounded-2xl p-3 space-y-2.5 shadow-xl">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-                    <span className="font-bangla font-bold text-xs text-amber-300">
-                      🔔 নতুন ট্রিপ রিকোয়েস্ট! (Ride Opportunity)
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onReplayVoiceAlert(activeRide.audioPromptBangla)}
-                    className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bangla font-bold flex items-center gap-1"
-                  >
-                    <Volume2 className="w-3 h-3" />
-                    <span>বাংলা ভয়েস শুনুন</span>
-                  </button>
-                </div>
-
-                {/* Bangla Voice Transcript Box */}
-                <div className="bg-[#0B131E]/90 border border-slate-800 rounded-xl p-2 text-[11px] font-bangla text-emerald-200 flex items-start gap-2">
-                  <Volume2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>“{activeRide.audioPromptBangla}”</span>
-                </div>
-
-                {/* Route & Passenger Details */}
-                <div className="space-y-1.5 text-xs font-bangla bg-[#0B131E] p-2.5 rounded-xl border border-slate-800">
-                  <div className="flex items-center justify-between text-[11px] text-slate-400">
-                    <span>যাত্রী: {activeRide.passengerName}</span>
-                    <span className="text-amber-400 font-bold">
-                      প্রস্তাবিত ভাড়া: ৳{baseOffer}
-                    </span>
-                  </div>
-                  <div className="text-white font-semibold truncate">
-                    🟢 পিকআপ: {activeRide.pickupLandmark.banglaName}
-                  </div>
-                  <div className="text-rose-200 font-semibold truncate">
-                    🔴 গন্তব্য: {activeRide.dropoffLandmark.banglaName}
-                  </div>
-                </div>
-
-                {mySubmittedBid ? (
-                  <div className="p-2.5 rounded-xl bg-emerald-950/50 border border-emerald-500/50 text-center font-bangla space-y-1">
-                    <div className="text-xs font-bold text-emerald-300">
-                      ✓ আপনার বিড পাঠানো হয়েছে: ৳{mySubmittedBid.bidAmount}
-                    </div>
-                    <p className="text-[10px] text-slate-300">
-                      বাম পাশের Passenger Phone থেকে বিডটি গ্রহণ (Accept) করুন অথবা নিচে বিড আপডেট করুন:
-                    </p>
-                  </div>
-                ) : null}
-
-                {/* 1-Tap Accept Offer Button */}
-                <button
-                  type="button"
-                  onClick={() => onSubmitBid(baseOffer)}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#006A4E] to-[#10B981] hover:from-[#047857] hover:to-[#34D399] active:scale-[0.99] text-white font-bangla font-bold text-xs shadow-lg flex items-center justify-center gap-1.5"
-                >
-                  <span>✓ ৳{baseOffer}-এ গ্রহণ করুন (Accept Offer)</span>
-                </button>
-
-                {/* Quick Counter-Bid Pills (+৳10, +৳20, +৳30) */}
-                <div className="space-y-1.5">
-                  <div className="text-[10px] font-bangla text-slate-400 flex items-center justify-between">
-                    <span>অথবা পাল্টা ভাড়া প্রস্তাব করুন (InDrive Counter-Bid):</span>
-                    {isLowBalanceLocked && (
-                      <span className="text-rose-400 font-bold">🔒 ৫০ টাকার নিচে লকড</span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5 font-bangla">
-                    {[10, 20, 30].map((add) => {
-                      const targetAmount = baseOffer + add;
-                      return (
-                        <button
-                          key={add}
-                          type="button"
-                          onClick={() => onSubmitBid(targetAmount)}
-                          className="py-2 px-2 rounded-xl bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/50 font-bold text-xs transition-all active:scale-95"
-                        >
-                          +৳{add} (৳{targetAmount})
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Custom Counter-Bid Input */}
-                  <div className="flex items-center gap-1.5 pt-1">
-                    <input
-                      type="number"
-                      placeholder="কাস্টম ভাড়া (যেমন: 95)"
-                      value={customBidInput}
-                      onChange={(e) => setCustomBidInput(e.target.value)}
-                      className="flex-1 bg-[#0B131E] border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-bangla focus:outline-none focus:border-amber-400"
-                    />
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        const parsed = parseInt(customBidInput, 10);
-                        if (!isNaN(parsed) && parsed >= 20) {
-                          onSubmitBid(parsed);
-                          setCustomBidInput('');
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 font-bangla font-bold text-xs flex items-center gap-1 transition-all"
-                    >
-                      <Send className="w-3 h-3" />
-                      <span>বিড</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ACTIVE TRIP & CASH COLLECTION STATE */}
-            {activeRide && activeRide.status === 'ACCEPTED' && (
-              <div className="bg-gradient-to-b from-[#0E2920] to-[#111C2D] border-2 border-emerald-500 rounded-2xl p-3 space-y-2.5 shadow-xl">
-                <div className="bg-emerald-500/20 border border-emerald-400/40 rounded-xl p-2 text-center font-bangla">
-                  <div className="font-bold text-xs text-emerald-300">
-                    🎉 রাইড কনফার্ম হয়েছে! যাত্রীর কাছে রওয়ানা হন
-                  </div>
-                  <div className="text-[10px] text-emerald-100 mt-0.5">
-                    চূড়ান্ত নির্ধারিত ভাড়া: <strong>৳{activeRide.agreedFare}</strong> (৮% কমিশন: ৳
-                    {Math.round(((activeRide.agreedFare || 80) * 8) / 100)})
-                  </div>
-                </div>
-
-                <div className="bg-[#0B131E] rounded-xl p-2.5 border border-slate-800 text-xs font-bangla space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">যাত্রী:</span>
-                    <span className="text-white font-bold">{activeRide.passengerName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">মোবাইল:</span>
-                    <span className="text-emerald-400 font-mono">{activeRide.passengerPhone}</span>
-                  </div>
-                  <div className="text-slate-200 truncate pt-1 border-t border-slate-800/80">
-                    📍 পিকআপ: {activeRide.pickupLandmark.banglaName}
-                  </div>
-                  <div className="text-slate-200 truncate">
-                    🏁 গন্তব্য: {activeRide.dropoffLandmark.banglaName}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={onStreamGpsStep}
-                    className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 border border-amber-500/40 font-bangla font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <Navigation className="w-3.5 h-3.5" />
-                    <span>📍 Stream GPS Movement (যাত্রীর ম্যাপে গাড়ি চালান)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={onCompleteRide}
-                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#006A4E] to-[#10B981] hover:from-[#047857] hover:to-[#34D399] active:scale-95 text-white font-bangla font-bold text-xs shadow-lg flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <Coins className="w-4 h-4" />
-                    <span>
-                      💰 ট্রিপ সম্পন্ন ও নগদ গ্রহণ (Complete & Collect ৳{activeRide.agreedFare})
-                    </span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* IDLE RADAR WAITING STATE */}
-            {(!activeRide || activeRide.status === 'IDLE' || activeRide.status === 'COMPLETED') && (
-              <div className="bg-[#111C2D] border border-slate-800 rounded-2xl p-4 text-center space-y-2 font-bangla">
-                <div className="w-11 h-11 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto">
-                  <Radio className="w-5 h-5 text-emerald-400 animate-pulse" />
-                </div>
-                <h3 className="font-bold text-xs text-white">
-                  ভৈরব লাইভ ট্রিপ রাডার সক্রিয় আছে
-                </h3>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  বাম পাশের <strong>Passenger Phone</strong> থেকে{' '}
-                  <span className="text-emerald-400 font-semibold">
-                    “⚡ রাইড রিকোয়েস্ট পাঠান”
-                  </span>{' '}
-                  বাটনে চাপ দিন — সাথে সাথে এখানে বাংলা ভয়েস অ্যালার্ট ও বিডিং কার্ড চলে আসবে!
-                </p>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* TAB 2: BKASH / NAGAD PREPAID WALLET & 8% COMMISSION LEDGER */}
-        {activeTab === 'WALLET' && (
-          <div className="space-y-2.5 font-bangla">
-            {/* Balance Hero Card */}
-            <div className="bg-gradient-to-br from-[#2B091C] via-[#171528] to-[#111C2D] border border-[#E2136E]/50 rounded-2xl p-3.5 space-y-2.5 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase tracking-wider text-pink-300 font-bold">
-                    bKash / Nagad Prepaid Driver Wallet
-                  </span>
-                  <div className="text-2xl font-extrabold text-white mt-0.5">
-                    ৳{walletBalance.toFixed(0)}
-                  </div>
-                </div>
-                <span
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                    isLowBalanceLocked
-                      ? 'bg-rose-600 text-white'
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  }`}
-                >
-                  {isLowBalanceLocked ? '🔒 লকড (< ৳৫০)' : '✓ বিডিং সচল (≥ ৳৫০)'}
-                </span>
-              </div>
-
-              {/* Minimum 50 BDT Threshold Progress Bar */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] text-slate-300">
-                  <span>নূন্যতম বিডিং ব্যালেন্স সীমা: ৳৫০</span>
-                  <span>মাত্র ৮% প্ল্যাটফর্ম কমিশন</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-900 overflow-hidden border border-slate-800">
-                  <div
-                    className={`h-full transition-all duration-500 ${
-                      isLowBalanceLocked ? 'bg-rose-500' : 'bg-emerald-400'
-                    }`}
-                    style={{ width: `${Math.min(100, (walletBalance / 200) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Gateway Switcher (bKash / Nagad) */}
-              <div className="grid grid-cols-2 gap-1.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('BKASH')}
-                  className={`py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                    paymentMethod === 'BKASH'
-                      ? 'bg-[#E2136E] border-pink-400 text-white shadow-sm'
-                      : 'bg-[#0B131E] border-slate-800 text-slate-400'
-                  }`}
-                >
-                  🪽 বিকাশ (bKash)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('NAGAD')}
-                  className={`py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                    paymentMethod === 'NAGAD'
-                      ? 'bg-orange-600 border-orange-400 text-white shadow-sm'
-                      : 'bg-[#0B131E] border-slate-800 text-slate-400'
-                  }`}
-                >
-                  🔥 নগদ (Nagad)
-                </button>
-              </div>
-
-              {/* Instant Top-Up Buttons (+৳100 / +৳200 / +৳500) */}
-              <div className="space-y-1.5">
-                <div className="text-[10px] text-pink-200 font-semibold">
-                  ১-ক্লিকে টোকেনাইজড ওয়ালেট রিচার্জ করুন:
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[100, 200, 500].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
+                      onClick={() => openBkashTokenizedModal(100)}
                       disabled={topupLoading}
-                      onClick={() => handleQuickTopup(amt)}
-                      className="py-2 rounded-xl bg-[#E2136E] hover:bg-[#c81061] active:scale-95 text-white font-bold text-xs shadow-md transition-all"
+                      className={`${BTN_BKASH} h-12 text-[14px]`}
                     >
-                      +৳{amt}
+                      bKash-এ ৳১০০ রিচার্জ
                     </button>
-                  ))}
+                    <button type="button" onClick={() => setActiveTab('WALLET')} className={BTN_SECONDARY}>
+                      ওয়ালেট দেখুন
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {/* Server error (e.g. bid rejected while < ৳50) */}
+              {driverErrorBanner && (
+                <div role="alert" className="rounded-lg border border-danger/40 bg-danger/5 p-3 flex gap-2 text-[14px] text-ink">
+                  <AlertTriangle className="w-5 h-5 text-danger shrink-0" aria-hidden />
+                  <span>{driverErrorBanner}</span>
                 </div>
+              )}
+
+              {/* Trip finished: cash and 8% commission */}
+              {lastCommissionSummary && (
+                <section className={CARD}>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[16px] font-semibold flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-brand-text" aria-hidden />
+                      ট্রিপ শেষ
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={onDismissSummary}
+                      aria-label="বন্ধ করুন"
+                      className={`w-11 h-11 -mr-2 rounded-md flex items-center justify-center text-ink-2 hover:bg-raised ${PRESS}`}
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <dl className="mt-1 divide-y divide-line text-[14px]">
+                    <div className="flex justify-between py-2">
+                      <dt className="text-ink-2">নগদ পেয়েছেন</dt>
+                      <dd className={MONO}>৳{lastCommissionSummary.cashCollected}</dd>
+                    </div>
+                    <div className="flex justify-between py-2">
+                      <dt className="text-ink-2">কমিশন কাটা হয়েছে (৮%)</dt>
+                      <dd className={MONO}>−৳{lastCommissionSummary.commissionDeducted}</dd>
+                    </div>
+                    <div className="flex justify-between py-2">
+                      <dt className="text-ink-2">নতুন ব্যালেন্স</dt>
+                      <dd className={`${MONO} font-semibold`}>৳{lastCommissionSummary.newBalance}</dd>
+                    </div>
+                  </dl>
+                </section>
+              )}
+
+              {/* Incoming ride request */}
+              {activeRide && (activeRide.status === 'SEARCHING' || activeRide.status === 'BIDDING') && (
+                <section className="rounded-lg border border-warning/50 bg-surface p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden className="w-2.5 h-2.5 rounded-full bg-warning" />
+                      <h3 className="text-[16px] font-semibold">নতুন ট্রিপ</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onReplayVoiceAlert(activeRide.audioPromptBangla)}
+                      className={`${BTN_SECONDARY} px-3`}
+                    >
+                      <Volume2 className="w-4 h-4" aria-hidden />
+                      আবার শুনুন
+                    </button>
+                  </div>
+
+                  <p className="text-[14px] text-ink-2">“{activeRide.audioPromptBangla}”</p>
+
+                  <RouteStops
+                    pickup={activeRide.pickupLandmark.banglaName}
+                    dropoff={activeRide.dropoffLandmark.banglaName}
+                    pickupMeta={
+                      <>
+                        {' · '}
+                        <span className={MONO}>{km(currentLandmark, activeRide.pickupLandmark)}</span> কিমি দূরে
+                      </>
+                    }
+                    dropoffMeta={
+                      <>
+                        {' · '}
+                        <span className={MONO}>{km(activeRide.pickupLandmark, activeRide.dropoffLandmark)}</span> কিমি যাত্রা
+                      </>
+                    }
+                  />
+
+                  <div className="flex items-end justify-between gap-3 border-t border-line pt-3">
+                    <div>
+                      <div className="text-[13px] text-ink-2">যাত্রীর প্রস্তাব</div>
+                      <div className={`${MONO} text-[24px] font-semibold leading-tight`}>৳{baseOffer}</div>
+                    </div>
+                    <div className="text-[13px] text-ink-2 truncate">{activeRide.passengerName}</div>
+                  </div>
+
+                  {mySubmittedBid && (
+                    <p role="status" className="rounded-md bg-raised px-3 py-2 text-[14px] text-ink">
+                      আপনার বিড <span className={`${MONO} font-semibold`}>৳{mySubmittedBid.bidAmount}</span> পাঠানো
+                      হয়েছে। যাত্রী গ্রহণ করলে ট্রিপ শুরু হবে।
+                    </p>
+                  )}
+
+                  <button type="button" onClick={() => onSubmitBid(baseOffer)} className={BTN_PRIMARY}>
+                    <span className={MONO}>৳{baseOffer}</span>-এ গ্রহণ করুন
+                  </button>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[13px] text-ink-2">
+                      <span>অথবা পাল্টা ভাড়া দিন</span>
+                      {isLowBalanceLocked && (
+                        <span className="flex items-center gap-1 text-danger font-medium">
+                          <Lock className="w-3.5 h-3.5" aria-hidden />
+                          ব্যালেন্স কম
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[10, 20, 30].map((add) => {
+                        const targetAmount = baseOffer + add;
+                        return (
+                          <button
+                            key={add}
+                            type="button"
+                            onClick={() => onSubmitBid(targetAmount)}
+                            aria-label={`৳${targetAmount} বিড দিন`}
+                            className={`h-14 rounded-md border border-warning/50 bg-warning/5 text-warning flex flex-col items-center justify-center hover:bg-warning/10 ${PRESS}`}
+                          >
+                            <span className={`${MONO} text-[16px] font-semibold`}>৳{targetAmount}</span>
+                            <span className={`${MONO} text-[12px]`}>+{add}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <label htmlFor="custom-bid" className="sr-only">
+                        নিজের ভাড়া লিখুন
+                      </label>
+                      <input
+                        id="custom-bid"
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="অন্য ভাড়া, যেমন ৯৫"
+                        value={customBidInput}
+                        onChange={(e) => setCustomBidInput(e.target.value)}
+                        className={`${FIELD} ${MONO}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const parsed = parseInt(customBidInput, 10);
+                          if (!isNaN(parsed) && parsed >= 20) {
+                            onSubmitBid(parsed);
+                            setCustomBidInput('');
+                          }
+                        }}
+                        className={`h-12 px-4 shrink-0 rounded-md border border-warning/50 text-warning text-[14px] font-semibold hover:bg-warning/10 ${PRESS}`}
+                      >
+                        বিড দিন
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* Active trip */}
+              {activeRide && activeRide.status === 'ACCEPTED' && (
+                <section className="rounded-lg border border-brand/40 bg-surface p-4 space-y-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden className="w-2.5 h-2.5 rounded-full bg-brand" />
+                      <h3 className="text-[16px] font-semibold">যাত্রীকে তুলতে যান</h3>
+                    </div>
+                    <div className="mt-3 flex items-end justify-between gap-3">
+                      <div>
+                        <div className="text-[13px] text-ink-2">ঠিক হওয়া ভাড়া</div>
+                        <div className={`${MONO} text-[24px] font-semibold leading-tight`}>
+                          ৳{activeRide.agreedFare}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[13px] text-ink-2">কমিশন (৮%)</div>
+                        <div className={`${MONO} text-[14px]`}>
+                          ৳{Math.round(((activeRide.agreedFare || 80) * 8) / 100)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <dl className="divide-y divide-line border-y border-line text-[14px]">
+                    <div className="flex justify-between gap-3 py-2">
+                      <dt className="text-ink-2">যাত্রী</dt>
+                      <dd className="font-medium truncate">{activeRide.passengerName}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3 py-2">
+                      <dt className="text-ink-2">মোবাইল</dt>
+                      <dd className={MONO}>{activeRide.passengerPhone}</dd>
+                    </div>
+                  </dl>
+
+                  <RouteStops
+                    pickup={activeRide.pickupLandmark.banglaName}
+                    dropoff={activeRide.dropoffLandmark.banglaName}
+                  />
+
+                  <div className="space-y-2">
+                    <button type="button" onClick={onStreamGpsStep} className={`${BTN_SECONDARY} w-full`}>
+                      <Navigation className="w-4 h-4" aria-hidden />
+                      ম্যাপে গাড়ি এগিয়ে নিন
+                    </button>
+                    <button type="button" onClick={onCompleteRide} className={BTN_PRIMARY}>
+                      ট্রিপ শেষ, <span className={MONO}>৳{activeRide.agreedFare}</span> নগদ নিন
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {/* No trip right now */}
+              {(!activeRide || activeRide.status === 'IDLE' || activeRide.status === 'COMPLETED') && (
+                <section className={`${CARD} py-6 text-center`}>
+                  <h3 className="text-[16px] font-semibold">এখন কোনো ট্রিপ নেই</h3>
+                  <p className="text-[14px] text-ink-2 mt-1">
+                    {isOnline
+                      ? 'বাম পাশের যাত্রী ফোন থেকে রাইড চাইলে এখানে দেখাবে, সাথে বাংলায় ঘোষণা হবে।'
+                      : 'অনলাইন হলে নতুন ট্রিপ এখানে দেখাবে।'}
+                  </p>
+                </section>
+              )}
+            </>
+          )}
+
+          {activeTab === 'WALLET' && (
+            <>
+              {/* Balance */}
+              <section className={`${CARD} space-y-4`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[13px] text-ink-2">ওয়ালেট ব্যালেন্স</div>
+                    <div
+                      className={`${MONO} text-[24px] font-semibold leading-tight ${
+                        isLowBalanceLocked ? 'text-danger' : 'text-ink'
+                      }`}
+                    >
+                      ৳{walletBalance.toFixed(0)}
+                    </div>
+                  </div>
+                  <span
+                    className={`flex items-center gap-1.5 text-[13px] font-medium ${
+                      isLowBalanceLocked ? 'text-danger' : 'text-ink-2'
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`w-2.5 h-2.5 rounded-full ${isLowBalanceLocked ? 'bg-danger' : 'bg-brand'}`}
+                    />
+                    {isLowBalanceLocked ? 'বিড বন্ধ' : 'বিড চালু'}
+                  </span>
+                </div>
+
+                <div>
+                  <div aria-hidden className="h-2 rounded-full bg-raised overflow-hidden">
+                    <div
+                      className={`h-full ${isLowBalanceLocked ? 'bg-danger' : 'bg-brand'}`}
+                      style={{ width: `${Math.min(100, (walletBalance / 200) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="mt-1.5 flex justify-between text-[12px] text-ink-3">
+                    <span>বিড করতে কমপক্ষে ৳৫০</span>
+                    <span>কমিশন প্রতি ট্রিপে ৮%</span>
+                  </div>
+                </div>
+              </section>
+
+              {/* Top-up */}
+              <section className={`${CARD} space-y-3`}>
+                <h3 className="text-[16px] font-semibold">রিচার্জ</h3>
+
+                <div role="radiogroup" aria-label="পেমেন্ট মাধ্যম" className="grid grid-cols-2 gap-2">
+                  {(['BKASH', 'NAGAD'] as const).map((m) => {
+                    const selected = paymentMethod === m;
+                    const selectedCls = m === 'BKASH' ? 'border-bkash bg-bkash/5 text-bkash' : 'border-ink bg-raised text-ink';
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setPaymentMethod(m)}
+                        className={`h-12 rounded-md border text-[14px] font-semibold ${PRESS} ${
+                          selected ? selectedCls : 'border-line text-ink-2 hover:bg-raised'
+                        }`}
+                      >
+                        {m === 'BKASH' ? 'bKash' : 'Nagad'}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div>
+                  <div className={LABEL}>পরিমাণ বেছে নিন</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[100, 200, 500].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        disabled={topupLoading}
+                        onClick={() => handleQuickTopup(amt)}
+                        className={`h-12 rounded-md border border-line bg-surface text-ink text-[16px] font-medium hover:bg-raised ${MONO} ${PRESS}`}
+                      >
+                        +৳{amt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   type="button"
                   disabled={topupLoading}
                   onClick={() => openBkashTokenizedModal(200)}
-                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#E2136E] to-[#B90E58] hover:from-[#c81061] hover:to-[#9e0c4b] active:scale-[0.99] text-white font-bold text-xs shadow-lg flex items-center justify-center gap-1.5 border border-pink-400/40"
+                  className={`${BTN_BKASH} h-14 w-full text-[16px]`}
                 >
-                  <Wallet className="w-3.5 h-3.5" />
-                  <span>৳ বিকাশ রিচার্জ (bKash Top-Up • Tokenized v1.2)</span>
+                  <Wallet className="w-5 h-5" aria-hidden />
+                  bKash-এ রিচার্জ করুন
+                </button>
+              </section>
+
+              {/* Ledger */}
+              <section className="rounded-lg border border-line bg-surface">
+                <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                  <h3 className="text-[16px] font-semibold">লেনদেন</h3>
+                  <span className="text-[13px] text-ink-3">
+                    <span className={MONO}>{transactions.length}</span>টি
+                  </span>
+                </div>
+
+                {transactions.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-[14px] text-ink-2">
+                    এখনো কোনো লেনদেন নেই। রিচার্জ করলে বা ট্রিপ শেষ হলে এখানে দেখাবে।
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-line max-h-[300px] overflow-y-auto overscroll-contain phone-scroll">
+                    {transactions.map((tx) => {
+                      const isPositive = tx.amount > 0;
+                      return (
+                        <li key={tx.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[14px] text-ink truncate">{tx.noteBangla}</div>
+                            <div className="text-[12px] text-ink-3 flex gap-1.5 min-w-0">
+                              <span className="shrink-0">{TX_LABEL[tx.type] ?? tx.type}</span>
+                              {tx.gatewayTrxId && (
+                                <span className="font-mono truncate">#{tx.gatewayTrxId}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div
+                              className={`${MONO} text-[14px] font-semibold ${
+                                isPositive ? 'text-brand-text' : 'text-ink'
+                              }`}
+                            >
+                              {isPositive ? `+৳${tx.amount}` : `−৳${Math.abs(tx.amount)}`}
+                            </div>
+                            <div className="text-[12px] text-ink-3">
+                              ব্যালেন্স <span className={MONO}>৳{tx.balanceAfter}</span>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            </>
+          )}
+
+          {activeTab === 'KYC' && (
+            <>
+              <section className={`${CARD} space-y-2`}>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-[16px] font-semibold">কেওয়াইসি যাচাই</h3>
+                  <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink-2">
+                    <span aria-hidden className={`w-2.5 h-2.5 rounded-full ${kycDot}`} />
+                    {kycStatusLabel}
+                  </span>
+                </div>
+                <p className="text-[14px] text-ink-2">
+                  ইজিবাইক ও সিএনজি চালকদের এনআইডি এবং ভৈরব পৌরসভার ওয়ার্ড কাউন্সিলরের প্রত্যয়নপত্র লাগবে। বাইক ও
+                  মাইক্রোবাস চালকদের বিআরটিএ লাইসেন্সও লাগবে।
+                </p>
+              </section>
+
+              <form onSubmit={handleKycSubmit} className={`${CARD} space-y-4`}>
+                <div>
+                  <label htmlFor="kyc-nid" className={LABEL}>
+                    এনআইডি নম্বর
+                  </label>
+                  <input
+                    id="kyc-nid"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={nidNumber}
+                    onChange={(e) => setNidNumber(e.target.value)}
+                    className={`${FIELD} ${MONO}`}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="kyc-vehicle" className={LABEL}>
+                    গাড়ির মডেল ও পৌরসভা টোকেন নম্বর
+                  </label>
+                  <input
+                    id="kyc-vehicle"
+                    type="text"
+                    value={vehicleModel}
+                    onChange={(e) => setVehicleModel(e.target.value)}
+                    className={FIELD}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="kyc-ward" className={LABEL}>
+                    ওয়ার্ড কাউন্সিলরের প্রত্যয়নপত্র বা ইউনিয়ন সনদ
+                    <span className="text-ink-3"> · ইজিবাইক, সিএনজি</span>
+                  </label>
+                  <input
+                    id="kyc-ward"
+                    type="text"
+                    value={wardCert}
+                    onChange={(e) => setWardCert(e.target.value)}
+                    className={`${FIELD} ${MONO}`}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="kyc-brta" className={LABEL}>
+                    বিআরটিএ ড্রাইভিং লাইসেন্স
+                    <span className="text-ink-3"> · বাইক, মাইক্রোবাস</span>
+                  </label>
+                  <input
+                    id="kyc-brta"
+                    type="text"
+                    value={brtaLicense}
+                    onChange={(e) => setBrtaLicense(e.target.value)}
+                    className={`${FIELD} ${MONO}`}
+                  />
+                </div>
+
+                <button type="submit" className={BTN_PRIMARY}>
+                  <FileCheck2 className="w-5 h-5" aria-hidden />
+                  জমা দিন
+                </button>
+
+                {kycSubmittedMsg && (
+                  <p role="status" className="flex gap-2 text-[14px] text-ink">
+                    <CheckCircle2 className="w-5 h-5 text-brand-text shrink-0" aria-hidden />
+                    <span>{kycSubmittedMsg}</span>
+                  </p>
+                )}
+              </form>
+            </>
+          )}
+        </main>
+
+        {/* Bottom navigation */}
+        <nav aria-label="চালক অ্যাপ" className="grid grid-cols-3 shrink-0 border-t border-line bg-surface select-none">
+          {tabs.map(({ id, label, Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                aria-current={active ? 'page' : undefined}
+                className={`h-16 flex flex-col items-center justify-center gap-1 text-[12px] transition-colors duration-150 ease-out ${
+                  active ? 'text-brand-text font-semibold' : 'text-ink-3 hover:text-ink-2'
+                }`}
+              >
+                <Icon className="w-5 h-5" aria-hidden />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* bKash tokenized checkout sheet */}
+        {bkashModalOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bkash-sheet-title"
+            className="absolute inset-0 z-30 bg-ink/40 flex flex-col justify-end"
+          >
+            <div className="bg-surface rounded-t-xl shadow-lg flex flex-col max-h-[90%]">
+              <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                <div>
+                  <div id="bkash-sheet-title" className="text-[16px] font-semibold text-bkash">
+                    bKash
+                  </div>
+                  <div className="text-[13px] text-ink-2">চলো ভৈরব ওয়ালেট রিচার্জ</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBkashModalOpen(false)}
+                  aria-label="বন্ধ করুন"
+                  className={`w-11 h-11 -mr-2 rounded-md flex items-center justify-center text-ink-2 hover:bg-raised ${PRESS}`}
+                >
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </div>
 
-            {/* Transaction Ledger Table */}
-            <div className="bg-[#111C2D] border border-slate-800 rounded-2xl p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-xs text-white flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-                  <span>ওয়ালেট লেনদেন ও ৮% কমিশন লেজার</span>
-                </h4>
-                <span className="text-[10px] text-slate-400">{transactions.length}টি এন্ট্রি</span>
-              </div>
-
-              <div className="space-y-1.5 max-h-[260px] overflow-y-auto phone-scroll pr-1">
-                {transactions.map((tx) => {
-                  const isPositive = tx.amount > 0;
-                  return (
-                    <div
-                      key={tx.id}
-                      className="bg-[#0B131E] border border-slate-800/90 rounded-xl p-2 flex items-center justify-between gap-2 text-[11px]"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
-                              tx.type === 'BKASH_TOPUP' || tx.type === 'NAGAD_TOPUP'
-                                ? 'bg-pink-500/20 text-pink-300'
-                                : tx.type === 'COMMISSION_DEDUCTION'
-                                  ? 'bg-amber-500/20 text-amber-300'
-                                  : 'bg-emerald-500/20 text-emerald-300'
-                            }`}
-                          >
-                            {tx.type}
-                          </span>
-                          {tx.gatewayTrxId && (
-                            <span className="text-[9px] font-mono text-slate-500">
-                              #{tx.gatewayTrxId}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-slate-200 truncate mt-0.5">{tx.noteBangla}</p>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <div
-                          className={`font-extrabold text-xs ${
-                            isPositive ? 'text-emerald-400' : 'text-rose-400'
-                          }`}
-                        >
-                          {isPositive ? `+৳${tx.amount}` : `-৳${Math.abs(tx.amount)}`}
-                        </div>
-                        <div className="text-[9px] text-slate-500">
-                          ব্যালেন্স: ৳{tx.balanceAfter}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: TIERED KYC VERIFICATION (MUNICIPAL WARD CERT / BRTA) */}
-        {activeTab === 'KYC' && (
-          <div className="space-y-2.5 font-bangla">
-            <div className="bg-gradient-to-r from-emerald-950/60 to-[#111C2D] border border-emerald-500/40 rounded-2xl p-3 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-xs text-white flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>ভৈরব ২-স্তরের চালক কেওয়াইসি (Tiered KYC)</span>
-                </span>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                    persona.kycStatus === 'APPROVED' || kycSubmittedMsg
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  }`}
-                >
-                  {kycSubmittedMsg
-                    ? '✓ যাচাইয়ের জন্য জমা'
-                    : persona.kycStatus === 'APPROVED'
-                      ? '✓ অনুমোদিত'
-                      : '⏳ ভেরিফিকেশন পেন্ডিং'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-300">
-                ইজিবাইক ও সিএনজি চালকদের জন্য এনআইডি এবং <strong>ভৈরব পৌরসভা ওয়ার্ড কাউন্সিলর প্রত্যয়নপত্র</strong> প্রযোজ্য।
-              </p>
-            </div>
-
-            <form
-              onSubmit={handleKycSubmit}
-              className="bg-[#111C2D] border border-slate-800 rounded-2xl p-3 space-y-2.5 text-xs"
-            >
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1">
-                  জাতীয় পরিচয়পত্র নম্বর (Smart NID Number)
-                </label>
-                <input
-                  type="text"
-                  value={nidNumber}
-                  onChange={(e) => setNidNumber(e.target.value)}
-                  className="w-full bg-[#0B131E] border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-emerald-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1">
-                  যানবাহনের মডেল ও পৌরসভা টোকেন নম্বর
-                </label>
-                <input
-                  type="text"
-                  value={vehicleModel}
-                  onChange={(e) => setVehicleModel(e.target.value)}
-                  className="w-full bg-[#0B131E] border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-emerald-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-emerald-300 font-semibold mb-1">
-                  ওয়ার্ড কাউন্সিলর প্রত্যয়নপত্র / ইউনিয়ন সনদ (Easy-Bike/CNG Tier-1)
-                </label>
-                <input
-                  type="text"
-                  value={wardCert}
-                  onChange={(e) => setWardCert(e.target.value)}
-                  className="w-full bg-[#0B131E] border border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-emerald-200 text-xs focus:outline-none focus:border-emerald-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-1">
-                  বিআরটিএ ড্রাইভিং লাইসেন্স (বাইক ও মাইক্রোবাস Tier-2)
-                </label>
-                <input
-                  type="text"
-                  value={brtaLicense}
-                  onChange={(e) => setBrtaLicense(e.target.value)}
-                  className="w-full bg-[#0B131E] border border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-emerald-400"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#006A4E] to-[#10B981] hover:from-[#047857] hover:to-[#34D399] text-white font-bold text-xs shadow-lg flex items-center justify-center gap-1.5"
-              >
-                <FileCheck2 className="w-4 h-4" />
-                <span>কেওয়াইসি ডকুমেন্ট জমা দিন (POST /auth/driver/kyc)</span>
-              </button>
-
-              {kycSubmittedMsg && (
-                <div className="p-2 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-200 text-[11px] flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>{kycSubmittedMsg}</span>
-                </div>
-              )}
-            </form>
-          </div>
-        )}
-      </div>
-
-      {/* IN-PHONE BKASH TOKENIZED CHECKOUT SHEET / MODAL (v1.2.0-beta) */}
-      {bkashModalOpen && (
-        <div className="absolute inset-0 z-30 bg-black/80 backdrop-blur-sm flex flex-col justify-end p-2.5 animate-fadeIn">
-          <div className="rounded-3xl overflow-hidden border-2 border-[#E2136E] bg-[#160710] shadow-[0_0_40px_rgba(226,19,110,0.45)] flex flex-col max-h-[710px]">
-            {/* Official bKash Pink Header */}
-            <div className="bg-gradient-to-r from-[#E2136E] via-[#C91062] to-[#9E0B4B] px-3.5 py-2.5 flex items-center justify-between text-white">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-white/15 border border-white/30 flex items-center justify-center font-extrabold text-xs">
-                  ৳
-                </div>
-                <div>
-                  <div className="text-xs font-extrabold tracking-tight flex items-center gap-1.5">
-                    <span>bKash Tokenized Checkout</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/30 font-mono">
-                      v1.2.0-beta
-                    </span>
+              <div className="p-4 space-y-4 overflow-y-auto overscroll-contain phone-scroll">
+                {bkashStep === 'CREATING' && (
+                  <div role="status" className="py-10 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-bkash mx-auto" aria-hidden />
+                    <p className="text-[14px] text-ink-2 mt-3">পেমেন্ট শুরু হচ্ছে…</p>
                   </div>
-                  <div className="text-[10px] text-pink-100 font-bangla">
-                    চলো ভৈরব ড্রাইভার প্রিপেইড ওয়ালেট গেটওয়ে
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setBkashModalOpen(false)}
-                className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+                )}
 
-            <div className="p-3.5 space-y-2.5 overflow-y-auto phone-scroll font-bangla text-xs">
-              {bkashStep === 'CREATING' && (
-                <div className="py-8 text-center space-y-2">
-                  <div className="w-10 h-10 rounded-full bg-[#E2136E]/20 border border-[#E2136E] flex items-center justify-center mx-auto animate-spin">
-                    <Wallet className="w-5 h-5 text-pink-400" />
-                  </div>
-                  <div className="font-bold text-white">
-                    বিকাশ পেমেন্ট সেশন তৈরি হচ্ছে... (POST /payments/bkash/create)
-                  </div>
-                  <div className="text-[10px] text-pink-200 font-mono">
-                    Generating Tokenized PaymentID & Invoice...
-                  </div>
-                </div>
-              )}
-
-              {(bkashStep === 'CHECKOUT' || bkashStep === 'EXECUTING') && (
-                <>
-                  {/* Merchant & Invoice Summary Box */}
-                  <div className="bg-[#240B1A] border border-pink-500/30 rounded-2xl p-2.5 space-y-1.5">
-                    <div className="flex items-center justify-between">
+                {(bkashStep === 'CHECKOUT' || bkashStep === 'EXECUTING') && (
+                  <>
+                    <div className="flex items-end justify-between gap-3">
                       <div>
-                        <div className="text-[10px] text-pink-300 font-semibold">মার্চেন্ট (Merchant)</div>
-                        <div className="font-bold text-white text-xs">
-                          CholoBhairab (চলো ভৈরব)
-                        </div>
+                        <div className="text-[13px] text-ink-2">মার্চেন্ট</div>
+                        <div className="text-[16px] font-medium">CholoBhairab</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[10px] text-pink-300 font-semibold">পরিমাণ (Amount)</div>
-                        <div className="text-base font-extrabold text-white">৳{bkashAmount}</div>
+                        <div className="text-[13px] text-ink-2">পরিমাণ</div>
+                        <div className={`${MONO} text-[24px] font-semibold leading-tight`}>৳{bkashAmount}</div>
                       </div>
                     </div>
 
-                    <div className="pt-1.5 border-t border-pink-500/20 grid grid-cols-2 gap-1 text-[10px] font-mono">
-                      <div className="truncate text-pink-200" title={bkashPaymentID}>
-                        ID: <span className="text-white font-bold">{bkashPaymentID}</span>
-                      </div>
-                      <div className="truncate text-right text-pink-200" title={bkashInvoiceNo}>
-                        Inv: <span className="text-white">#{bkashInvoiceNo}</span>
-                      </div>
-                    </div>
-
-                    {/* Amount Selector Pills inside Modal */}
-                    <div className="pt-1 flex items-center justify-between gap-1.5">
+                    <div role="radiogroup" aria-label="পরিমাণ" className="grid grid-cols-3 gap-2">
                       {[100, 200, 500].map((amt) => (
                         <button
                           key={amt}
                           type="button"
+                          role="radio"
+                          aria-checked={bkashAmount === amt}
+                          disabled={bkashStep === 'EXECUTING'}
                           onClick={() => openBkashTokenizedModal(amt)}
-                          className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                          className={`h-11 rounded-md border text-[14px] font-semibold ${MONO} ${PRESS} ${
                             bkashAmount === amt
-                              ? 'bg-[#E2136E] border-white text-white'
-                              : 'bg-[#12050D] border-pink-500/30 text-pink-200'
+                              ? 'border-bkash bg-bkash/5 text-bkash'
+                              : 'border-line text-ink-2 hover:bg-raised'
                           }`}
                         >
-                          +৳{amt}
+                          ৳{amt}
                         </button>
                       ))}
-                      {bkashUrl && (
-                        <a
-                          href={bkashUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-2 py-1 rounded-lg bg-slate-900 border border-pink-400/40 text-pink-200 hover:text-white text-[10px] flex items-center gap-1 shrink-0"
-                          title="Open standalone bKash Mock Checkout HTML page in new tab"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>URL</span>
-                        </a>
-                      )}
                     </div>
-                  </div>
 
-                  {/* Authentic bKash Account, OTP, and PIN Verification Fields */}
-                  <div className="bg-[#1F0916] border border-pink-500/30 rounded-2xl p-2.5 space-y-2">
+                    <dl className="text-[12px] space-y-1">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-ink-3 shrink-0">Payment ID</dt>
+                        <dd className="font-mono text-ink-2 truncate" title={bkashPaymentID}>
+                          {bkashPaymentID}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-ink-3 shrink-0">ইনভয়েস</dt>
+                        <dd className="font-mono text-ink-2 truncate" title={bkashInvoiceNo}>
+                          {bkashInvoiceNo}
+                        </dd>
+                      </div>
+                    </dl>
+
                     <div>
-                      <label className="block text-[10px] text-pink-200 mb-0.5 flex items-center gap-1">
-                        <Smartphone className="w-3 h-3 text-pink-400" />
-                        <span>আপনার বিকাশ অ্যাকাউন্ট নম্বর (bKash Account)</span>
+                      <label htmlFor="bkash-account" className={LABEL}>
+                        bKash অ্যাকাউন্ট নম্বর
                       </label>
                       <input
-                        type="text"
+                        id="bkash-account"
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel"
                         value={bkashAccount}
                         onChange={(e) => setBkashAccount(e.target.value)}
-                        className="w-full bg-[#12050D] border border-pink-500/40 rounded-xl px-2.5 py-1.5 text-white font-mono text-xs text-center font-bold focus:outline-none focus:border-pink-400"
+                        className={`${FIELD} ${MONO} focus:border-bkash`}
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] text-pink-200 mb-0.5">
-                          ৬-ডিজিট ওটিপি (OTP)
+                        <label htmlFor="bkash-otp" className={LABEL}>
+                          OTP (৬ সংখ্যা)
                         </label>
                         <input
+                          id="bkash-otp"
                           type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
                           maxLength={6}
                           value={bkashOtp}
                           onChange={(e) => setBkashOtp(e.target.value)}
-                          className="w-full bg-[#12050D] border border-pink-500/40 rounded-xl px-2 py-1.5 text-emerald-300 font-mono text-xs text-center tracking-widest font-bold focus:outline-none"
+                          className={`${FIELD} ${MONO} text-center tracking-[0.2em] focus:border-bkash`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-pink-200 mb-0.5 flex items-center gap-1">
-                          <KeyRound className="w-3 h-3 text-pink-400" />
-                          <span>৫-ডিজিট পিন (PIN)</span>
+                        <label htmlFor="bkash-pin" className={LABEL}>
+                          PIN (৫ সংখ্যা)
                         </label>
                         <input
+                          id="bkash-pin"
                           type="password"
+                          inputMode="numeric"
                           maxLength={5}
                           value={bkashPin}
                           onChange={(e) => setBkashPin(e.target.value)}
-                          className="w-full bg-[#12050D] border border-pink-500/40 rounded-xl px-2 py-1.5 text-amber-300 font-mono text-xs text-center tracking-widest font-bold focus:outline-none"
+                          className={`${FIELD} ${MONO} text-center tracking-[0.2em] focus:border-bkash`}
                         />
                       </div>
                     </div>
-                  </div>
 
-                  {/* Confirm & Cancel Action Buttons */}
-                  <div className="space-y-1.5 pt-0.5">
-                    <button
-                      type="button"
-                      disabled={bkashStep === 'EXECUTING'}
-                      onClick={handleConfirmBkashExecute}
-                      className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#E2136E] to-[#FF2E88] hover:from-[#c81061] hover:to-[#e2136e] active:scale-[0.99] text-white font-bold text-xs shadow-lg flex items-center justify-center gap-1.5"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>
-                        {bkashStep === 'EXECUTING'
-                          ? 'পেমেন্ট যাচাই হচ্ছে (Executing...)'
-                          : '✓ পেমেন্ট নিশ্চিত করুন (Confirm & Execute Payment)'}
-                      </span>
-                    </button>
+                    {bkashUrl && (
+                      <a
+                        href={bkashUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 h-11 text-[13px] text-ink-2 hover:text-ink underline-offset-2 hover:underline"
+                      >
+                        <ExternalLink className="w-4 h-4" aria-hidden />
+                        আলাদা পেজে bKash চেকআউট খুলুন
+                      </a>
+                    )}
+
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        disabled={bkashStep === 'EXECUTING'}
+                        onClick={handleConfirmBkashExecute}
+                        className={`${BTN_BKASH} h-14 w-full text-[16px]`}
+                      >
+                        {bkashStep === 'EXECUTING' ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
+                            যাচাই হচ্ছে…
+                          </>
+                        ) : (
+                          'পেমেন্ট নিশ্চিত করুন'
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBkashModalOpen(false)}
+                        className={`h-12 w-full rounded-md text-[14px] font-medium text-ink-2 hover:bg-raised ${PRESS}`}
+                      >
+                        বাতিল
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {bkashStep === 'RECEIPT' && bkashReceipt && (
+                  <>
+                    <div role="status" className="text-center pt-2">
+                      <CheckCircle2 className="w-6 h-6 text-brand-text mx-auto" aria-hidden />
+                      <p className="text-[16px] font-semibold mt-2">রিচার্জ হয়েছে</p>
+                      <p className={`${MONO} text-[24px] font-semibold`}>৳{bkashReceipt.amountBdt}</p>
+                    </div>
+
+                    <dl className="divide-y divide-line border-y border-line text-[14px]">
+                      <div className="flex justify-between gap-4 py-2.5">
+                        <dt className="text-ink-2 shrink-0">TrxID</dt>
+                        <dd className="font-mono text-ink truncate">{bkashReceipt.trxID}</dd>
+                      </div>
+                      <div className="flex justify-between gap-4 py-2.5">
+                        <dt className="text-ink-2 shrink-0">সময়</dt>
+                        <dd className={`${MONO} text-ink`}>{bkashReceipt.paidAt}</dd>
+                      </div>
+                      <div className="flex justify-between gap-4 py-2.5">
+                        <dt className="text-ink-2 shrink-0">Payment ID</dt>
+                        <dd className="font-mono text-ink-2 truncate">{bkashReceipt.paymentID}</dd>
+                      </div>
+                      <div className="flex justify-between gap-4 py-2.5">
+                        <dt className="text-ink-2 shrink-0">ইনভয়েস</dt>
+                        <dd className="font-mono text-ink-2 truncate">{bkashReceipt.invoiceNumber}</dd>
+                      </div>
+                      <div className="flex justify-between gap-4 py-2.5">
+                        <dt className="text-ink-2 shrink-0">ব্যালেন্স</dt>
+                        <dd className={`${MONO} text-ink font-medium`}>
+                          ৳{bkashReceipt.prevBalance} → ৳{bkashReceipt.newBalance}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    {bkashReceipt.prevBalance < 50 && bkashReceipt.newBalance >= 50 && (
+                      <p className="flex items-center gap-2 text-[14px] text-ink">
+                        <span aria-hidden className="w-2.5 h-2.5 rounded-full bg-brand" />
+                        এখন আবার বিড করতে পারবেন।
+                      </p>
+                    )}
 
                     <button
                       type="button"
                       onClick={() => setBkashModalOpen(false)}
-                      className="w-full py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-semibold"
+                      className={BTN_PRIMARY}
                     >
-                      ✕ বাতিল করুন (Cancel)
+                      ঠিক আছে
                     </button>
-                  </div>
-                </>
-              )}
-
-              {bkashStep === 'RECEIPT' && bkashReceipt && (
-                <div className="space-y-2.5 py-1">
-                  <div className="bg-emerald-950/70 border-2 border-emerald-500 rounded-2xl p-3 text-center space-y-1.5">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
-                    <div className="font-bold text-xs text-emerald-200">
-                      ✓ বিকাশ পেমেন্ট সফল • সার্ভার ভেরিফাইড!
-                    </div>
-                    <div className="text-[11px] font-mono text-white bg-[#0B131E] py-1 px-2 rounded-lg border border-emerald-500/40">
-                      TrxID: <strong className="text-emerald-400">{bkashReceipt.trxID}</strong>
-                    </div>
-                  </div>
-
-                  <div className="bg-[#240B1A] border border-pink-500/30 rounded-2xl p-2.5 space-y-1 text-[11px]">
-                    <div className="flex justify-between">
-                      <span className="text-pink-200">PaymentID:</span>
-                      <span className="font-mono text-white">{bkashReceipt.paymentID}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-pink-200">ইনভয়েস নম্বর:</span>
-                      <span className="font-mono text-slate-200">#{bkashReceipt.invoiceNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-pink-200">রিচার্জ পরিমাণ:</span>
-                      <span className="font-extrabold text-emerald-400">+৳{bkashReceipt.amountBdt}</span>
-                    </div>
-                    <div className="flex justify-between pt-1 border-t border-pink-500/20">
-                      <span className="text-pink-200">ওয়ালেট ব্যালেন্স:</span>
-                      <span className="font-extrabold text-white">
-                        ৳{bkashReceipt.prevBalance} → ৳{bkashReceipt.newBalance}{' '}
-                        {bkashReceipt.newBalance >= 50 && (
-                          <span className="text-emerald-400">🟢 আনলকড!</span>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 text-[10px] text-emerald-300 font-mono text-center">
-                    🗄️ Persisted in public.bkash_payments & wallet_transactions
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setBkashModalOpen(false)}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#006A4E] to-[#10B981] text-white font-bold text-xs shadow-lg"
-                  >
-                    ✓ ডান — ওয়ালেট ও ট্রিপ রাডারে ফিরুন
-                  </button>
-                </div>
-              )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Smartphone Bottom Navigation Bar */}
-      <div className="px-4 py-2 bg-[#070D15] border-t border-slate-800/90 grid grid-cols-3 gap-2 text-[10px] font-bangla">
-        <button
-          onClick={() => setActiveTab('RADAR')}
-          className={`flex flex-col items-center gap-0.5 py-1 rounded-xl ${
-            activeTab === 'RADAR' ? 'text-amber-400 font-bold' : 'text-slate-500'
-          }`}
-        >
-          <Radio className="w-4 h-4" />
-          <span>ট্রিপ রাডার</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('WALLET')}
-          className={`flex flex-col items-center gap-0.5 py-1 rounded-xl ${
-            activeTab === 'WALLET' ? 'text-pink-400 font-bold' : 'text-slate-500'
-          }`}
-        >
-          <Wallet className="w-4 h-4" />
-          <span>বিকাশ ওয়ালেট</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('KYC')}
-          className={`flex flex-col items-center gap-0.5 py-1 rounded-xl ${
-            activeTab === 'KYC' ? 'text-emerald-400 font-bold' : 'text-slate-500'
-          }`}
-        >
-          <FileCheck2 className="w-4 h-4" />
-          <span>কেওয়াইসি</span>
-        </button>
+        )}
       </div>
     </div>
   );

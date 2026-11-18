@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { GeoService } from '../geo/geo.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isDemoSeedEnabled } from '../../common/demo';
 
 export interface ActiveRide {
   id: string;
@@ -90,8 +91,10 @@ export class RidesService {
     const storedRides = this.prismaService.getRides();
     const storedDrivers = this.prismaService.getOnlineDrivers();
 
-    // Always seed initial fleet first so all 6 Bhairab drivers are online, then overlay stored drivers
-    this.seedBhairabFleetDriversOnly();
+    // Seed initial demo fleet first so all 6 Bhairab drivers are online, then overlay stored drivers
+    if (isDemoSeedEnabled()) {
+      this.seedBhairabFleetDriversOnly();
+    }
     if (Array.isArray(storedDrivers) && storedDrivers.length > 0) {
       for (const d of storedDrivers) {
         this.onlineDrivers.set(d.driverId, {
@@ -116,7 +119,7 @@ export class RidesService {
       this.logger.log(
         `Restored ${this.activeRides.size} rides and ${this.onlineDrivers.size} online drivers from durable state`,
       );
-    } else {
+    } else if (isDemoSeedEnabled()) {
       this.seedBhairabRidesOnly();
       this.persistToStore();
     }
@@ -335,9 +338,9 @@ export class RidesService {
   updateDriverLocation(driverId: string, lat: number, lng: number) {
     const driver = this.onlineDrivers.get(driverId);
     if (driver) {
+      // In-memory only: GPS pings must not rewrite the state file; the next ride/driver event persists it
       driver.lat = lat;
       driver.lng = lng;
-      this.persistToStore();
     }
   }
 
