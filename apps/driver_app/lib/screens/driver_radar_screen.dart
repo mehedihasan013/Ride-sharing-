@@ -485,19 +485,24 @@ class _DriverRadarScreenState extends State<DriverRadarScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.location_on, color: Color(0xFF006A4E), size: 20),
-                    SizedBox(width: 6),
-                    Text(
-                      'ভৈরব স্ট্যান্ড / বর্তমান অবস্থান (GPS Hub)',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                const Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.location_on, color: Color(0xFF006A4E), size: 20),
+                      SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'ভৈরব স্ট্যান্ড / বর্তমান অবস্থান (GPS Hub)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     visualDensity: VisualDensity.compact,
@@ -521,6 +526,7 @@ class _DriverRadarScreenState extends State<DriverRadarScreen> {
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
+              isExpanded: true, // lets long landmark names ellipsize instead of overflowing
               value: landmarks.any((l) => l.id == selected.id)
                   ? selected.id
                   : landmarks.first.id,
@@ -588,9 +594,12 @@ class _DriverRadarScreenState extends State<DriverRadarScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row: badge + countdown timer
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Header row: badge + countdown timer (Wrap: countdown drops below on narrow phones)
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -828,8 +837,10 @@ class _DriverRadarScreenState extends State<DriverRadarScreen> {
             ),
             const SizedBox(height: 12),
 
-            // ETA Selector (২ মিনিট, ৩ মিনিট, ৫ মিনিট)
-            Row(
+            // ETA Selector (২ মিনিট, ৩ মিনিট, ৫ মিনিট); Wrap moves chips to a new line on narrow phones
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 4,
               children: [
                 const Text(
                   'পৌঁছানোর সময় (ETA):',
@@ -940,13 +951,16 @@ class _DriverRadarScreenState extends State<DriverRadarScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'কাস্টম পাল্টা ভাড়া: ৳${customFare.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13.5,
+                      Flexible(
+                        child: Text(
+                          'কাস্টম পাল্টা ভাড়া: ৳${customFare.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 8),
                       FilledButton.tonal(
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFF59E0B),

@@ -229,7 +229,7 @@ class _DriverKycScreenState extends State<DriverKycScreen> {
               crossAxisCount: 2,
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
-              childAspectRatio: 2.1,
+              mainAxisExtent: 86, // fixed height fits a 2-line title + subtitle on narrow phones
             ),
             itemBuilder: (context, index) {
               final opt = _vehicleOptions[index];
@@ -269,6 +269,8 @@ class _DriverKycScreenState extends State<DriverKycScreen> {
                           children: [
                             Text(
                               opt['titleBangla'] as String,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,

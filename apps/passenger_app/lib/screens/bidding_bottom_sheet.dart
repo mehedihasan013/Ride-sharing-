@@ -9,10 +9,15 @@ class BiddingBottomSheet extends StatefulWidget {
   final VoidCallback? onBidAccepted;
   final VoidCallback? onCancelSearch;
 
+  /// True inside the fixed-height modal: the bid list fills the free space.
+  /// Keep false when placed inside a scroll view (unbounded height).
+  final bool expandList;
+
   const BiddingBottomSheet({
     super.key,
     this.onBidAccepted,
     this.onCancelSearch,
+    this.expandList = false,
   });
 
   /// Helper to present the live bidding feed as a modal bottom sheet.
@@ -34,6 +39,7 @@ class BiddingBottomSheet extends StatefulWidget {
           ),
           padding: const EdgeInsets.all(16),
           child: BiddingBottomSheet(
+            expandList: true,
             onBidAccepted: () {
               Navigator.of(context).pop();
               onBidAccepted?.call();
@@ -54,6 +60,13 @@ class BiddingBottomSheet extends StatefulWidget {
 
 class _BiddingBottomSheetState extends State<BiddingBottomSheet> {
   bool _sortByEta = false;
+
+  Widget _sizedBidList(Widget list) => widget.expandList
+      ? Flexible(child: list)
+      : ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 330),
+          child: list,
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -226,9 +239,8 @@ class _BiddingBottomSheetState extends State<BiddingBottomSheet> {
               ),
             )
           else
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 330),
-              child: ListView.separated(
+            _sizedBidList(
+              ListView.separated(
                 shrinkWrap: true,
                 itemCount: sortedBids.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -316,23 +328,31 @@ class _BiddingBottomSheetState extends State<BiddingBottomSheet> {
                                     ),
                                   ),
                                   const SizedBox(height: 4),
-                                  Row(
+                                  // Wrap: the offer badge drops to a new line on narrow cards instead of being cut off
+                                  Wrap(
+                                    spacing: 10,
+                                    runSpacing: 2,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
                                     children: [
-                                      const Icon(
-                                        Icons.access_time_filled,
-                                        size: 13,
-                                        color: Color(0xFF34D399),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.access_time_filled,
+                                            size: 13,
+                                            color: Color(0xFF34D399),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'পৌঁছাতে সময়: ${bid.etaMinutes} মিনিট',
+                                            style: const TextStyle(
+                                              color: Color(0xFF34D399),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'পৌঁছাতে সময়: ${bid.etaMinutes} মিনিট',
-                                        style: const TextStyle(
-                                          color: Color(0xFF34D399),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
                                       Text(
                                         isExactMatch
                                             ? '✓ আপনার প্রস্তাবে রাজি'

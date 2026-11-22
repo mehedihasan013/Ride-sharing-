@@ -414,23 +414,24 @@ class _PassengerHomeScreenState extends State<PassengerHomeScreen> {
                   color: Color(0xFF94A3B8)),
               selectedIcon:
                   Icon(Icons.electric_rickshaw, color: Colors.white),
-              label: 'ট্রিপ বুকিং • Ride',
+              // Bangla and English on separate lines so labels never spill into the next tab
+              label: 'ট্রিপ বুকিং\nRide',
             ),
             NavigationDestination(
               icon: Icon(Icons.airport_shuttle_outlined,
                   color: Color(0xFF94A3B8)),
               selectedIcon: Icon(Icons.airport_shuttle, color: Colors.white),
-              label: 'ঢাকা ইন্টারসিটি • Intercity',
+              label: 'ঢাকা ইন্টারসিটি\nIntercity',
             ),
             NavigationDestination(
               icon: Icon(Icons.radar_outlined, color: Color(0xFF94A3B8)),
               selectedIcon: Icon(Icons.radar, color: Colors.white),
-              label: 'লাইভ ট্র্যাকিং • Active Trip',
+              label: 'লাইভ ট্র্যাকিং\nActive Trip',
             ),
             NavigationDestination(
               icon: Icon(Icons.shield_outlined, color: Color(0xFF94A3B8)),
               selectedIcon: Icon(Icons.shield, color: Colors.white),
-              label: 'প্রোফাইল ও নিরাপত্তা • Safety',
+              label: 'প্রোফাইল ও নিরাপত্তা\nSafety',
             ),
           ],
         ),
@@ -733,14 +734,17 @@ class _PassengerHomeScreenState extends State<PassengerHomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'আপনার প্রস্তাবিত ভাড়া (InDrive Fare Offer)',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                  const Flexible(
+                    child: Text(
+                      'আপনার প্রস্তাবিত ভাড়া (InDrive Fare Offer)',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     'সর্বনিম্ন: ৳${_selectedVehicle.minFare}',
                     style: const TextStyle(
@@ -779,35 +783,38 @@ class _PassengerHomeScreenState extends State<PassengerHomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 18),
-                  // Center Offer Fare Display
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 26,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0B131E),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF006A4E)),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          '৳$_offerFareBdt',
-                          style: const TextStyle(
-                            color: Color(0xFF34D399),
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
+                  // Center Offer Fare Display (shrinks on narrow phones so the steppers stay visible)
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0B131E),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF006A4E)),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            '৳$_offerFareBdt',
+                            style: const TextStyle(
+                              color: Color(0xFF34D399),
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
-                        ),
-                        const Text(
-                          'নগদ পরিশোধ (Cash Only)',
-                          style: TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 10.5,
+                          const Text(
+                            'নগদ পরিশোধ (Cash Only)',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 10.5,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 18),
@@ -892,20 +899,25 @@ class _PassengerHomeScreenState extends State<PassengerHomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.map_outlined, color: Color(0xFF34D399), size: 18),
-                    SizedBox(width: 6),
-                    Text(
-                      'ভৈরব লাইভ রাডার ম্যাপ (Meghna Corridor)',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13.5,
+                const Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.map_outlined, color: Color(0xFF34D399), size: 18),
+                      SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'ভৈরব লাইভ রাডার ম্যাপ (Meghna Corridor)',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 InkWell(
                   onTap: () => setState(
                     () => _selectingPickupOnMap = !_selectingPickupOnMap,

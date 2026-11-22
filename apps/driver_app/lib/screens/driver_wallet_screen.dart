@@ -672,14 +672,17 @@ class _DriverWalletScreenState extends State<DriverWalletScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'প্রিপেইড চালক ওয়ালেট ব্যালেন্স',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
+                    const Flexible(
+                      child: Text(
+                        'প্রিপেইড চালক ওয়ালেট ব্যালেন্স',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,

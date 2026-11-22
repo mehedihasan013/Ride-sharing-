@@ -162,22 +162,23 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
           NavigationDestination(
             icon: Icon(Icons.radar_outlined),
             selectedIcon: Icon(Icons.radar),
-            label: 'ট্রিপ রাডার • Radar',
+            // Bangla and English on separate lines so labels never spill into the next tab
+            label: 'ট্রিপ রাডার\nRadar',
           ),
           NavigationDestination(
             icon: Icon(Icons.account_balance_wallet_outlined),
             selectedIcon: Icon(Icons.account_balance_wallet),
-            label: 'বিকাশ ওয়ালেট • Wallet',
+            label: 'বিকাশ ওয়ালেট\nWallet',
           ),
           NavigationDestination(
             icon: Icon(Icons.verified_user_outlined),
             selectedIcon: Icon(Icons.verified_user),
-            label: 'কেওয়াইসি ও গাড়ি • KYC',
+            label: 'কেওয়াইসি ও গাড়ি\nKYC',
           ),
           NavigationDestination(
             icon: Icon(Icons.record_voice_over_outlined),
             selectedIcon: Icon(Icons.record_voice_over),
-            label: 'ভয়েস লগ • Voice Alerts',
+            label: 'ভয়েস লগ\nVoice Alerts',
           ),
         ],
       ),
@@ -211,24 +212,29 @@ class DriverVoiceAlertsTab extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.spatial_audio_off,
-                        color: Color(0xFF10B981),
-                        size: 24,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'বাংলা ভয়েস রাইড অ্যানাউন্সার',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                  const Expanded(
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.spatial_audio_off,
+                          color: Color(0xFF10B981),
+                          size: 24,
                         ),
-                      ),
-                    ],
+                        SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'বাংলা ভয়েস রাইড অ্যানাউন্সার',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   FilledButton.tonalIcon(
                     style: FilledButton.styleFrom(
                       backgroundColor: voiceService.isMuted

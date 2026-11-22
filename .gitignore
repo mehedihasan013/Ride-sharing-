@@ -24,3 +24,6 @@ Thumbs.db
 # Runtime durable state snapshots
 backend/data/*.json
 backend/data/*.tmp
+
+# graphify knowledge-graph output (regenerate with /graphify)
+graphify-out/

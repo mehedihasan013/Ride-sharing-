@@ -343,7 +343,7 @@ class ActiveTripSafetyScreen extends StatelessWidget {
               ? const Column(
                   children: [
                     Icon(
-                      Icons.directions_trolley,
+                      Icons.directions_car_outlined,
                       color: Color(0xFF64748B),
                       size: 38,
                     ),

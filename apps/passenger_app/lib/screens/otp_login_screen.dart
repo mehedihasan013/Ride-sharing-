@@ -251,14 +251,17 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'যাত্রী লগইন / নিবন্ধন',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                            const Flexible(
+                              child: Text(
+                                'যাত্রী লগইন / নিবন্ধন',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
+                            const SizedBox(width: 8),
                             TextButton.icon(
                               onPressed: _prefillDemoPassenger,
                               icon: const Icon(
@@ -526,9 +529,9 @@ class _OtpLoginScreenState extends State<OtpLoginScreen> {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _FeaturePill(icon: '🛺', label: 'ইজিবাইক ও সিএনজি'),
-                        _FeaturePill(icon: '🤝', label: 'ভাড়া দরকষাকষি'),
-                        _FeaturePill(icon: '🚨', label: '৯৯৯ ও এসওএস'),
+                        Flexible(child: _FeaturePill(icon: '🛺', label: 'ইজিবাইক ও সিএনজি')),
+                        Flexible(child: _FeaturePill(icon: '🤝', label: 'ভাড়া দরকষাকষি')),
+                        Flexible(child: _FeaturePill(icon: '🚨', label: '৯৯৯ ও এসওএস')),
                       ],
                     ),
                   ),
@@ -555,12 +558,14 @@ class _FeaturePill extends StatelessWidget {
       children: [
         Text(icon, style: const TextStyle(fontSize: 16)),
         const SizedBox(width: 5),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF94A3B8),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF94A3B8),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
