@@ -1,0 +1,39 @@
+name: cholo_ui
+description: "CholoBhairab shared design system: tokens, theme, bundled fonts, map and small components used by the passenger and driver apps."
+publish_to: 'none'
+version: 2.0.0
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.11.0
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  # Bundled so text renders offline and identically on every phone (OFL licences in fonts/).
+  fonts:
+    - family: HindSiliguri
+      fonts:
+        - asset: fonts/HindSiliguri-Regular.ttf
+        - asset: fonts/HindSiliguri-Medium.ttf
+          weight: 500
+        - asset: fonts/HindSiliguri-SemiBold.ttf
+          weight: 600
+    - family: Geist
+      fonts:
+        - asset: fonts/Geist-Regular.ttf
+        - asset: fonts/Geist-Medium.ttf
+          weight: 500
+        - asset: fonts/Geist-SemiBold.ttf
+          weight: 600

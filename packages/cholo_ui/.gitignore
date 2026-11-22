@@ -1,0 +1,3 @@
+# Library package: the apps' pubspec.lock files pin the resolved versions.
+pubspec.lock
+.flutter-plugins-dependencies
