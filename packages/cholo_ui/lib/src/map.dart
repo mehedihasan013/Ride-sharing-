@@ -47,6 +47,7 @@ class CbMap extends StatefulWidget {
     this.onCenterChanged,
     this.fitPadding = const EdgeInsets.fromLTRB(56, 120, 56, 360),
     this.initialZoom = 14.5,
+    this.initialCenter,
   });
 
   /// The app's applicationId; OpenStreetMap blocks requests without a real User-Agent.
@@ -64,6 +65,9 @@ class CbMap extends StatefulWidget {
   /// Space to keep clear around the fitted route (bottom panel, top controls).
   final EdgeInsets fitPadding;
   final double initialZoom;
+
+  /// Where the camera starts when there is no pickup (defaults to Bhairab).
+  final LatLng? initialCenter;
 
   @override
   State<CbMap> createState() => _CbMapState();
@@ -109,7 +113,7 @@ class _CbMapState extends State<CbMap> {
     return FlutterMap(
       mapController: _controller,
       options: MapOptions(
-        initialCenter: pickup ?? kBhairabCenter,
+        initialCenter: widget.initialCenter ?? pickup ?? kBhairabCenter,
         initialZoom: widget.initialZoom,
         minZoom: 9,
         maxZoom: 18,

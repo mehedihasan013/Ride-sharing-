@@ -8,12 +8,36 @@ import '../models/passenger_models.dart';
 const String kApiUrl =
     String.fromEnvironment('API_URL', defaultValue: 'http://localhost:4000');
 
+/// Android applicationId; also the User-Agent that OpenStreetMap's tile servers require.
+const String kAppPackageName = 'com.cholobhairab.cholobhairab_passenger';
+
+/// Demo affordances (login skip, simulated driver offers and movement, demo buttons).
+/// Build with --dart-define=DEMO_MODE=false for a pilot that must only show real data.
+const bool kDemoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: true);
+
+/// Thrown when the server can't be reached and demo mode is off.
+class PassengerApiException implements Exception {
+  const PassengerApiException(this.message);
+  final String message;
+
+  @override
+  String toString() => 'PassengerApiException: $message';
+}
+
 /// REST API client for CholoBhairab backend (`kApiUrl`, or `http://10.0.2.2:4000` on the Android emulator).
-/// Includes automatic offline fallback so the app works smoothly in any environment.
+/// Most calls fall back to offline data so the demo keeps working without a server.
 class PassengerApiService {
   String _customBaseUrl;
+  final http.Client _client;
 
-  PassengerApiService({String? baseUrl}) : _customBaseUrl = baseUrl ?? '';
+  PassengerApiService({String? baseUrl, http.Client? client})
+      : _customBaseUrl = baseUrl ?? '',
+        _client = client ?? http.Client();
+
+  static const _timeout = Duration(seconds: 4);
+
+  /// Sign-in waits longer: a sleeping free-tier server can take ~30 s to wake.
+  static const _authTimeout = Duration(seconds: 10);
 
   /// Resolves default backend URL depending on platform (Android emulator vs Web/Desktop).
   String get baseUrl {
@@ -38,18 +62,19 @@ class PassengerApiService {
         'Accept': 'application/json',
       };
 
-  /// 1. Request 6-digit OTP (`POST /auth/otp/request`)
+  /// 1. Request 6-digit OTP (`POST /auth/otp/request`).
+  /// `demoOtp` is present only when a development server sends it, or offline in demo mode.
   Future<Map<String, dynamic>> requestOtp(String phoneNumber) async {
     final normalizedPhone = phoneNumber.trim();
     try {
       final uri = Uri.parse('$baseUrl/auth/otp/request');
-      final response = await http
+      final response = await _client
           .post(
             uri,
             headers: _jsonHeaders,
             body: jsonEncode({'phoneNumber': normalizedPhone}),
           )
-          .timeout(const Duration(seconds: 4));
+          .timeout(_authTimeout);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
@@ -58,32 +83,31 @@ class PassengerApiService {
         }
       }
     } catch (e) {
-      debugPrint('PassengerApiService.requestOtp offline fallback: $e');
+      debugPrint('PassengerApiService.requestOtp failed: $e');
+      if (!kDemoMode) rethrow;
     }
 
-    // Graceful offline fallback
+    if (!kDemoMode) throw const PassengerApiException('otp request failed');
+    // Offline demo: verifyOtp accepts any code without a server, so suggest the demo one.
     return {
       'success': true,
       'phoneNumber': normalizedPhone,
       'demoOtp': '123456',
       'offlineFallback': true,
-      'messageBangla': 'চলো ভৈরব ওটিপি পাঠানো হয়েছে (ডেমো কোড: 123456)',
     };
   }
 
-  /// 2. Verify 6-digit OTP (`POST /auth/otp/verify`)
-  Future<PassengerSession> verifyOtp(
-    String phoneNumber,
-    String otp,
-    String fullName,
-  ) async {
+  /// 2. Verify OTP (`POST /auth/otp/verify`).
+  ///
+  /// Returns `null` when the server rejects the code (wrong or expired). A network failure or
+  /// server error gives an offline demo session in demo mode, otherwise throws
+  /// [PassengerApiException]. A rejected code never logs the user in.
+  Future<PassengerSession?> verifyOtp(String phoneNumber, String otp) async {
     final normalizedPhone = phoneNumber.trim();
-    final normalizedName =
-        fullName.trim().isEmpty ? 'আব্দুল করিম (Karim)' : fullName.trim();
-
+    final http.Response response;
     try {
       final uri = Uri.parse('$baseUrl/auth/otp/verify');
-      final response = await http
+      response = await _client
           .post(
             uri,
             headers: _jsonHeaders,
@@ -91,32 +115,35 @@ class PassengerApiService {
               'phoneNumber': normalizedPhone,
               'otp': otp.trim(),
               'role': 'PASSENGER',
-              'fullName': normalizedName,
             }),
           )
-          .timeout(const Duration(seconds: 4));
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) {
-          final sessionMap =
-              decoded['session'] as Map<String, dynamic>? ?? decoded;
-          return PassengerSession.fromJson(sessionMap);
-        }
-      }
+          .timeout(_authTimeout);
     } catch (e) {
-      debugPrint('PassengerApiService.verifyOtp offline fallback: $e');
+      debugPrint('PassengerApiService.verifyOtp unreachable: $e');
+      if (kDemoMode) return _offlineSession(normalizedPhone);
+      throw const PassengerApiException('server unreachable');
     }
 
-    // Offline fallback session
-    return PassengerSession(
-      userId: 'passenger_${normalizedPhone.replaceAll(RegExp(r'[^0-9]'), '')}',
-      phoneNumber: normalizedPhone,
-      fullName: normalizedName,
-      accessToken:
-          'jwt_offline_${DateTime.now().millisecondsSinceEpoch}_bhairab',
-    );
+    if (response.statusCode >= 400 && response.statusCode < 500) {
+      return null;
+    }
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        final sessionMap = decoded['session'] as Map<String, dynamic>? ?? decoded;
+        return PassengerSession.fromJson(sessionMap);
+      }
+    }
+    if (kDemoMode) return _offlineSession(normalizedPhone);
+    throw PassengerApiException('server error ${response.statusCode}');
   }
+
+  PassengerSession _offlineSession(String phone) => PassengerSession(
+        userId: 'passenger_${phone.replaceAll(RegExp(r'[^0-9]'), '')}',
+        phoneNumber: phone,
+        fullName: '',
+        accessToken: 'jwt_offline_${DateTime.now().millisecondsSinceEpoch}_bhairab',
+      );
 
   /// 3. Fetch all Bhairab landmarks (`GET /geo/landmarks`)
   Future<List<BhairabLandmark>> fetchLandmarks({String query = ''}) async {
@@ -124,9 +151,7 @@ class PassengerApiService {
       final uri = Uri.parse('$baseUrl/geo/landmarks').replace(
         queryParameters: query.trim().isEmpty ? null : {'q': query.trim()},
       );
-      final response = await http
-          .get(uri, headers: _jsonHeaders)
-          .timeout(const Duration(seconds: 4));
+      final response = await _client.get(uri, headers: _jsonHeaders).timeout(_timeout);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
@@ -174,9 +199,7 @@ class PassengerApiService {
           'dropoffLng': dropoffLng.toString(),
         },
       );
-      final response = await http
-          .get(uri, headers: _jsonHeaders)
-          .timeout(const Duration(seconds: 4));
+      final response = await _client.get(uri, headers: _jsonHeaders).timeout(_timeout);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
@@ -220,7 +243,6 @@ class PassengerApiService {
         type: 'EASYBIKE',
         banglaName: 'ইজিবাইক (টমটম)',
         englishName: 'Easy-Bike (Auto)',
-        icon: '🛺',
         minFare: 20,
         suggestedFare: math.max(20, (15 + distanceKm * 18).round()),
         etaMinutes: math.max(2, estimatedMinutes),
@@ -229,7 +251,6 @@ class PassengerApiService {
         type: 'BIKE',
         banglaName: 'বাইক (মোটরসাইকেল)',
         englishName: 'Motorbike',
-        icon: '🏍️',
         minFare: 30,
         suggestedFare: math.max(30, (25 + distanceKm * 22).round()),
         etaMinutes: math.max(2, (distanceKm * 2.5).round()),
@@ -238,7 +259,6 @@ class PassengerApiService {
         type: 'CNG',
         banglaName: 'সিএনজি অটোরিকশা',
         englishName: 'CNG Auto-Rickshaw',
-        icon: '🛺',
         minFare: 40,
         suggestedFare: math.max(40, (35 + distanceKm * 30).round()),
         etaMinutes: math.max(3, estimatedMinutes),
@@ -247,7 +267,6 @@ class PassengerApiService {
         type: 'CAR_MICROBUS',
         banglaName: 'মাইক্রোবাস / কার',
         englishName: 'Microbus / Noah',
-        icon: '🚐',
         minFare: 250,
         suggestedFare: math.max(250, (200 + distanceKm * 50).round()),
         etaMinutes: math.max(4, estimatedMinutes + 2),
@@ -255,7 +274,7 @@ class PassengerApiService {
     ];
   }
 
-  /// 5. Trigger or resolve 999 Emergency SOS (`POST /rides/:rideId/sos`, fallback `/admin/rides/:rideId/sos`)
+  /// 5. Trigger or resolve SOS (`POST /rides/:rideId/sos`, fallback `/admin/rides/:rideId/sos`)
   Future<Map<String, dynamic>> triggerSos(
     String rideId, {
     bool resolved = false,
@@ -263,13 +282,13 @@ class PassengerApiService {
     final targetId = rideId.trim().isEmpty ? 'demo' : rideId.trim();
     try {
       final uri = Uri.parse('$baseUrl/rides/$targetId/sos');
-      final response = await http
+      final response = await _client
           .post(
             uri,
             headers: _jsonHeaders,
             body: jsonEncode({'resolved': resolved}),
           )
-          .timeout(const Duration(seconds: 4));
+          .timeout(_timeout);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
@@ -280,13 +299,13 @@ class PassengerApiService {
 
       // Fallback to admin SOS endpoint if public route unavailable
       final fallbackUri = Uri.parse('$baseUrl/admin/rides/$targetId/sos');
-      final fallbackResponse = await http
+      final fallbackResponse = await _client
           .post(
             fallbackUri,
             headers: _jsonHeaders,
             body: jsonEncode({'resolved': resolved}),
           )
-          .timeout(const Duration(seconds: 4));
+          .timeout(_timeout);
 
       if (fallbackResponse.statusCode >= 200 &&
           fallbackResponse.statusCode < 300) {
@@ -303,9 +322,6 @@ class PassengerApiService {
       'success': true,
       'rideId': targetId,
       'sosActive': !resolved,
-      'messageBangla': resolved
-          ? '✓ জরুরী ৯৯৯ SOS অ্যালার্ট সমাধান করা হয়েছে'
-          : '🚨 জরুরী ৯৯৯ কমান্ড সেন্টার এবং পরিবারের সাথে লাইভ লোকেশন শেয়ার করা হয়েছে!',
     };
   }
 }

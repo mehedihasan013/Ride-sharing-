@@ -5,20 +5,19 @@ import '../models/passenger_models.dart';
 import 'passenger_api_service.dart';
 
 /// Real-time Socket.io client & state manager for the CholoBhairab Passenger App.
-/// Connects to `apiService.baseUrl` (`kApiUrl`, or `http://10.0.2.2:4000` on Android emulator)
-/// and includes a seamless built-in demo simulator when offline or when no live driver responds.
+/// Connects to `apiService.baseUrl` (`kApiUrl`, or `http://10.0.2.2:4000` on Android emulator).
+/// In demo mode ([kDemoMode]) it also simulates driver offers and driver movement so the app
+/// can be shown without live drivers.
 class PassengerSocketService extends ChangeNotifier {
   final PassengerApiService apiService;
 
   io.Socket? _socket;
   bool _isConnected = false;
-  bool _isOfflineDemoMode = false;
   PassengerSession _session = PassengerSession.demo();
 
   ActiveRideModel? _activeRide;
   final List<DriverBidModel> _incomingBids = [];
-  String? _statusBannerBangla;
-  String? _errorBannerBangla;
+  String? _errorMessage;
   int? _lastCompletedFareBdt;
 
   Timer? _demoBidTimer1;
@@ -32,7 +31,6 @@ class PassengerSocketService extends ChangeNotifier {
   }
 
   bool get isConnected => _isConnected;
-  bool get isOfflineDemoMode => _isOfflineDemoMode;
   PassengerSession get session => _session;
   ActiveRideModel? get activeRide => _activeRide;
 
@@ -47,8 +45,8 @@ class PassengerSocketService extends ChangeNotifier {
     return copy;
   }
 
-  String? get statusBannerBangla => _statusBannerBangla;
-  String? get errorBannerBangla => _errorBannerBangla;
+  /// Last server error (e.g. an offer that was no longer available). Cleared by [clearError].
+  String? get errorMessage => _errorMessage;
   int? get lastCompletedFareBdt => _lastCompletedFareBdt;
 
   void updateSession(PassengerSession newSession) {
@@ -56,9 +54,8 @@ class PassengerSocketService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearBanners() {
-    _statusBannerBangla = null;
-    _errorBannerBangla = null;
+  void clearError() {
+    _errorMessage = null;
     notifyListeners();
   }
 
@@ -84,7 +81,6 @@ class PassengerSocketService extends ChangeNotifier {
 
       socket.onConnect((_) {
         _isConnected = true;
-        _isOfflineDemoMode = false;
         debugPrint('PassengerSocketService connected to ${apiService.baseUrl}');
         notifyListeners();
       });
@@ -96,32 +92,22 @@ class PassengerSocketService extends ChangeNotifier {
 
       socket.onConnectError((err) {
         _isConnected = false;
-        _isOfflineDemoMode = true;
-        debugPrint('Socket connect error (offline demo fallback active): $err');
+        debugPrint('Socket connect error: $err');
         notifyListeners();
       });
 
       // 1. Listen to ride:created
       socket.on('ride:created', (data) {
-        if (data is Map) {
+        if (data is Map && _activeRide != null) {
           final map = Map<String, dynamic>.from(data);
-          final rideId = (map['rideId'] ?? _activeRide?.rideId ?? '').toString();
-          final trackingToken =
-              (map['liveTrackingToken'] ?? 'track_bhairab_live').toString();
-          final offerFare = (map['initialOfferFare'] as num?)?.round() ??
-              _activeRide?.initialOfferFare ??
-              80;
-
-          if (_activeRide != null) {
-            _activeRide = _activeRide!.copyWith(
-              rideId: rideId,
-              status: 'SEARCHING',
-              initialOfferFare: offerFare,
-              liveTrackingToken: trackingToken,
-            );
-          }
-          _statusBannerBangla =
-              'নিকটস্থ ভৈরব চালকদের কাছে আপনার ৳$offerFare প্রস্তাব পাঠানো হয়েছে...';
+          _activeRide = _activeRide!.copyWith(
+            rideId: (map['rideId'] ?? _activeRide!.rideId).toString(),
+            status: 'SEARCHING',
+            initialOfferFare:
+                (map['initialOfferFare'] as num?)?.round() ?? _activeRide!.initialOfferFare,
+            liveTrackingToken:
+                (map['liveTrackingToken'] ?? _activeRide!.liveTrackingToken).toString(),
+          );
           notifyListeners();
         }
       });
@@ -129,49 +115,40 @@ class PassengerSocketService extends ChangeNotifier {
       // 2. Listen to ride:new_bid
       socket.on('ride:new_bid', (data) {
         if (data is Map) {
-          final map = Map<String, dynamic>.from(data);
-          final bid = DriverBidModel.fromJson(map);
-          _upsertBid(bid);
+          _upsertBid(DriverBidModel.fromJson(Map<String, dynamic>.from(data)));
         }
       });
 
       // 3. Listen to ride:driver_assigned
       socket.on('ride:driver_assigned', (data) {
-        if (data is Map) {
+        if (data is Map && _activeRide != null) {
           final map = Map<String, dynamic>.from(data);
-          final agreedFare = (map['agreedFare'] as num?)?.round() ??
-              _activeRide?.initialOfferFare ??
-              85;
+          final agreedFare = (map['agreedFare'] as num?)?.round() ?? _activeRide!.initialOfferFare;
           final assigned = DriverBidModel(
             bidId: (map['bidId'] ?? 'bid_assigned').toString(),
             driverId: (map['driverId'] ?? 'driver_demo_1').toString(),
             driverName: (map['driverName'] ?? 'মোঃ রফিকুল ইসলাম').toString(),
             driverPhone: (map['driverPhone'] ?? '01811223301').toString(),
             ratingAvg: (map['ratingAvg'] as num?)?.toDouble() ?? 4.9,
-            vehicleModel:
-                (map['vehicleModel'] ?? 'ভৈরব ইজিবাইক #১২').toString(),
+            vehicleModel: (map['vehicleModel'] ?? 'ভৈরব ইজিবাইক #১২').toString(),
             bidAmount: agreedFare,
             etaMinutes: (map['etaMinutes'] as num?)?.round() ?? 2,
             timestamp: DateTime.now().millisecondsSinceEpoch,
           );
 
-          if (_activeRide != null) {
-            _activeRide = _activeRide!.copyWith(
-              status: 'ACCEPTED',
-              agreedFare: agreedFare,
-              assignedDriver: assigned,
-              driverLat: _activeRide!.pickupLat - 0.0025,
-              driverLng: _activeRide!.pickupLng + 0.0020,
-            );
-          }
-          _statusBannerBangla =
-              '🎉 রাইড নিশ্চিত হয়েছে! ${assigned.driverName} (৳$agreedFare) আপনার দিকে আসছেন।';
+          _activeRide = _activeRide!.copyWith(
+            status: 'ACCEPTED',
+            agreedFare: agreedFare,
+            assignedDriver: assigned,
+            driverLat: _activeRide!.pickupLat - 0.0025,
+            driverLng: _activeRide!.pickupLng + 0.0020,
+          );
           _startSimulatedGpsTelemetryIfIdle();
           notifyListeners();
         }
       });
 
-      // 4. Listen to ride:driver_location
+      // 4. Listen to ride:driver_location (the real driver started the trip)
       socket.on('ride:driver_location', (data) {
         if (data is Map && _activeRide != null) {
           final map = Map<String, dynamic>.from(data);
@@ -190,40 +167,35 @@ class PassengerSocketService extends ChangeNotifier {
 
       // 5. Listen to ride:completed
       socket.on('ride:completed', (data) {
-        if (data is Map) {
+        if (data is Map && _activeRide != null) {
           final map = Map<String, dynamic>.from(data);
-          final totalFare = (map['totalFare'] as num?)?.round() ??
-              _activeRide?.agreedFare ??
-              _activeRide?.initialOfferFare ??
-              80;
-          final msg = (map['messageBangla'] ??
-                  'ভ্রমণ সম্পন্ন হয়েছে। চলো ভৈরব সাথে থাকার জন্য ধন্যবাদ!')
-              .toString();
-
-          _lastCompletedFareBdt = totalFare;
-          if (_activeRide != null) {
-            _activeRide = _activeRide!.copyWith(status: 'COMPLETED');
-          }
-          _statusBannerBangla = msg;
+          _lastCompletedFareBdt = (map['totalFare'] as num?)?.round() ??
+              _activeRide!.agreedFare ??
+              _activeRide!.initialOfferFare;
+          _activeRide = _activeRide!.copyWith(status: 'COMPLETED');
           _demoGpsStreamTimer?.cancel();
           notifyListeners();
         }
       });
 
-      // 6. Listen to rider:error
+      // 6. Listen to rider:error (e.g. accepting an offer that is no longer available)
       socket.on('rider:error', (data) {
-        if (data is Map) {
-          _errorBannerBangla =
-              (data['message'] ?? 'একটি ত্রুটি ঘটেছে').toString();
-          notifyListeners();
+        _errorMessage = (data is Map ? data['message'] : null)?.toString() ?? 'error';
+        final ride = _activeRide;
+        if (ride != null && ride.status == 'ACCEPTED') {
+          // Undo the optimistic accept so the passenger can pick another offer.
+          _demoGpsStreamTimer?.cancel();
+          final failedBidId = ride.assignedDriver?.bidId;
+          _incomingBids.removeWhere((b) => b.bidId == failedBidId);
+          _activeRide = ride.withoutDriver();
         }
+        notifyListeners();
       });
 
       _socket = socket;
     } catch (e) {
       _isConnected = false;
-      _isOfflineDemoMode = true;
-      debugPrint('Socket initialization failed, using demo mode: $e');
+      debugPrint('Socket initialization failed: $e');
     }
   }
 
@@ -231,17 +203,19 @@ class PassengerSocketService extends ChangeNotifier {
     _incomingBids.removeWhere((b) => b.driverId == bid.driverId);
     _incomingBids.add(bid);
     if (_activeRide != null &&
-        (_activeRide!.status == 'SEARCHING' ||
-            _activeRide!.status == 'BIDDING')) {
+        (_activeRide!.status == 'SEARCHING' || _activeRide!.status == 'BIDDING')) {
       _activeRide = _activeRide!.copyWith(status: 'BIDDING');
     }
-    _statusBannerBangla =
-        '🔔 নতুন বিড এসেছে: ${bid.driverName} প্রস্তাব করেছেন ৳${bid.bidAmount} (${bid.etaMinutes} মিনিট)';
     notifyListeners();
   }
 
-  /// Emits `rider:request_ride` to backend and schedules fallback Bhairab driver bids
-  /// if offline or if no live driver responds within a few seconds.
+  /// Hides an offer on this phone (the backend has no decline event).
+  void declineBid(String bidId) {
+    _incomingBids.removeWhere((b) => b.bidId == bidId);
+    notifyListeners();
+  }
+
+  /// Emits `rider:request_ride`; in demo mode also schedules simulated driver offers.
   void requestRide({
     required String vehicleType,
     required BhairabLandmark pickup,
@@ -250,15 +224,12 @@ class PassengerSocketService extends ChangeNotifier {
   }) {
     _cancelDemoTimers();
     _incomingBids.clear();
-    _errorBannerBangla = null;
+    _errorMessage = null;
     _lastCompletedFareBdt = null;
 
-    final tempRideId = 'ride_${DateTime.now().millisecondsSinceEpoch}';
-    final tempToken =
-        'track_bhairab_${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-
+    final now = DateTime.now().millisecondsSinceEpoch;
     _activeRide = ActiveRideModel(
-      rideId: tempRideId,
+      rideId: 'ride_$now',
       status: 'SEARCHING',
       pickupAddress: pickup.banglaName,
       dropoffAddress: dropoff.banglaName,
@@ -267,112 +238,68 @@ class PassengerSocketService extends ChangeNotifier {
       dropoffLat: dropoff.latitude,
       dropoffLng: dropoff.longitude,
       initialOfferFare: initialOfferFare,
-      liveTrackingToken: tempToken,
+      liveTrackingToken: 'track_bhairab_${now.toString().substring(7)}',
       vehicleType: vehicleType,
     );
-
-    _statusBannerBangla =
-        '📡 ভৈরবে নিকটস্থ চালকদের কাছে ৳$initialOfferFare ভাড়ার প্রস্তাব পাঠানো হচ্ছে...';
     notifyListeners();
 
-    final payload = {
-      'passengerId': _session.userId,
-      'passengerName': _session.fullName,
-      'passengerPhone': _session.phoneNumber,
-      'vehicleType': vehicleType,
-      'pickupLat': pickup.latitude,
-      'pickupLng': pickup.longitude,
-      'pickupAddress': pickup.banglaName,
-      'dropoffLat': dropoff.latitude,
-      'dropoffLng': dropoff.longitude,
-      'dropoffAddress': dropoff.banglaName,
-      'initialOfferFare': initialOfferFare,
-    };
-
     if (_isConnected && _socket != null) {
-      _socket!.emit('rider:request_ride', payload);
-    } else {
-      _isOfflineDemoMode = true;
+      _socket!.emit('rider:request_ride', {
+        'passengerId': _session.userId,
+        'passengerName': _session.fullName,
+        'passengerPhone': _session.phoneNumber,
+        'vehicleType': vehicleType,
+        'pickupLat': pickup.latitude,
+        'pickupLng': pickup.longitude,
+        'pickupAddress': pickup.banglaName,
+        'dropoffLat': dropoff.latitude,
+        'dropoffLng': dropoff.longitude,
+        'dropoffAddress': dropoff.banglaName,
+        'initialOfferFare': initialOfferFare,
+      });
     }
 
-    // Schedule realistic Bhairab counter-bids if no live driver bid has arrived yet
-    _scheduleSimulatedDriverBids(vehicleType, initialOfferFare);
+    if (kDemoMode) _scheduleSimulatedDriverBids(vehicleType, initialOfferFare);
   }
 
   void _scheduleSimulatedDriverBids(String vehicleType, int offerFare) {
-    final vehicleLabel = _vehicleModelForType(vehicleType, 1);
-    final vehicleLabel2 = _vehicleModelForType(vehicleType, 2);
-    final vehicleLabel3 = _vehicleModelForType(vehicleType, 3);
+    bool stillBidding() =>
+        _activeRide != null &&
+        (_activeRide!.status == 'SEARCHING' || _activeRide!.status == 'BIDDING');
 
     _demoBidTimer1 = Timer(const Duration(milliseconds: 2200), () {
-      if (_activeRide == null ||
-          (_activeRide!.status != 'SEARCHING' &&
-              _activeRide!.status != 'BIDDING')) {
-        return;
-      }
-      // Only inject if no bid from this driver yet
-      if (_incomingBids.isEmpty) {
-        _upsertBid(
-          DriverBidModel(
-            bidId: 'bid_sim_1_${DateTime.now().millisecondsSinceEpoch}',
-            driverId: 'driver_demo_1',
-            driverName: 'মোঃ রফিকুল ইসলাম',
-            driverPhone: '01811223301',
-            ratingAvg: 4.9,
-            vehicleModel: vehicleLabel,
-            bidAmount: offerFare, // Accepts passenger's exact offer!
-            etaMinutes: 2,
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
-      }
+      if (!stillBidding() || _incomingBids.isNotEmpty) return;
+      _upsertBid(_simulatedBid(1, 'driver_demo_1', 'মোঃ রফিকুল ইসলাম', '01811223301', 4.9,
+          vehicleType, offerFare, 2));
     });
 
     _demoBidTimer2 = Timer(const Duration(milliseconds: 3800), () {
-      if (_activeRide == null ||
-          (_activeRide!.status != 'SEARCHING' &&
-              _activeRide!.status != 'BIDDING')) {
-        return;
-      }
-      if (_incomingBids.length < 2) {
-        _upsertBid(
-          DriverBidModel(
-            bidId: 'bid_sim_2_${DateTime.now().millisecondsSinceEpoch}',
-            driverId: 'driver_demo_2',
-            driverName: 'কামাল হোসেন',
-            driverPhone: '01711223302',
-            ratingAvg: 4.8,
-            vehicleModel: vehicleLabel2,
-            bidAmount: offerFare + 10, // Counter-offer +10 BDT
-            etaMinutes: 1,
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
-      }
+      if (!stillBidding() || _incomingBids.length >= 2) return;
+      _upsertBid(_simulatedBid(2, 'driver_demo_2', 'কামাল হোসেন', '01711223302', 4.8,
+          vehicleType, offerFare + 10, 1));
     });
 
     _demoBidTimer3 = Timer(const Duration(milliseconds: 5500), () {
-      if (_activeRide == null ||
-          (_activeRide!.status != 'SEARCHING' &&
-              _activeRide!.status != 'BIDDING')) {
-        return;
-      }
-      if (_incomingBids.length < 3) {
-        _upsertBid(
-          DriverBidModel(
-            bidId: 'bid_sim_3_${DateTime.now().millisecondsSinceEpoch}',
-            driverId: 'driver_demo_6',
-            driverName: 'শফিকুল আলম',
-            driverPhone: '01811223306',
-            ratingAvg: 4.7,
-            vehicleModel: vehicleLabel3,
-            bidAmount: offerFare + 20, // Counter-offer +20 BDT
-            etaMinutes: 3,
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
-      }
+      if (!stillBidding() || _incomingBids.length >= 3) return;
+      _upsertBid(_simulatedBid(3, 'driver_demo_6', 'শফিকুল আলম', '01811223306', 4.7,
+          vehicleType, offerFare + 20, 3));
     });
+  }
+
+  DriverBidModel _simulatedBid(int variant, String driverId, String name, String phone,
+      double rating, String vehicleType, int amount, int eta) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return DriverBidModel(
+      bidId: 'bid_sim_${variant}_$now',
+      driverId: driverId,
+      driverName: name,
+      driverPhone: phone,
+      ratingAvg: rating,
+      vehicleModel: _vehicleModelForType(vehicleType, variant),
+      bidAmount: amount,
+      etaMinutes: eta,
+      timestamp: now,
+    );
   }
 
   String _vehicleModelForType(String type, int variant) {
@@ -410,7 +337,7 @@ class PassengerSocketService extends ChangeNotifier {
     if (_activeRide == null) return;
     _cancelDemoTimers();
 
-    if (_isConnected && _socket != null && !bid.bidId.startsWith('bid_sim_')) {
+    if (_isConnected && _socket != null && !bid.isSimulated) {
       _socket!.emit('rider:accept_bid', {
         'rideId': _activeRide!.rideId,
         'bidId': bid.bidId,
@@ -424,48 +351,56 @@ class PassengerSocketService extends ChangeNotifier {
       driverLat: _activeRide!.pickupLat - 0.0020,
       driverLng: _activeRide!.pickupLng + 0.0018,
     );
-
-    _statusBannerBangla =
-        '🎉 রাইড কনফার্ম হয়েছে! ${bid.driverName} (${bid.vehicleModel}) ৳${bid.bidAmount} ভাড়ায় আসছেন।';
     _startSimulatedGpsTelemetryIfIdle();
     notifyListeners();
   }
 
-  /// Streams smooth GPS movement from pickup toward dropoff so the Live Tracking radar & coordinates animate live.
+  /// Demo only: the driver drives to the pickup (ACCEPTED), then to the drop-off (IN_PROGRESS).
   void _startSimulatedGpsTelemetryIfIdle() {
     _demoGpsStreamTimer?.cancel();
-    int step = 0;
-    const int totalSteps = 25;
+    final ride = _activeRide;
+    if (!kDemoMode || ride == null) return;
+
+    const approachSteps = 4;
+    const tripSteps = 25;
+    final startLat = ride.driverLat ?? ride.pickupLat;
+    final startLng = ride.driverLng ?? ride.pickupLng;
+    var step = 0;
 
     _demoGpsStreamTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (_activeRide == null ||
-          _activeRide!.status == 'COMPLETED' ||
-          _activeRide!.status == 'CANCELLED') {
+      final current = _activeRide;
+      if (current == null || current.status == 'COMPLETED' || current.status == 'BIDDING') {
         timer.cancel();
         return;
       }
-
       step++;
-      final progress = (step / totalSteps).clamp(0.0, 1.0);
-      final currentLat = _activeRide!.pickupLat +
-          (_activeRide!.dropoffLat - _activeRide!.pickupLat) * progress;
-      final currentLng = _activeRide!.pickupLng +
-          (_activeRide!.dropoffLng - _activeRide!.pickupLng) * progress;
+      final double lat;
+      final double lng;
+      final String status;
+      if (step <= approachSteps) {
+        final t = step / approachSteps;
+        lat = startLat + (current.pickupLat - startLat) * t;
+        lng = startLng + (current.pickupLng - startLng) * t;
+        status = 'ACCEPTED';
+      } else {
+        final t = ((step - approachSteps) / tripSteps).clamp(0.0, 1.0);
+        lat = current.pickupLat + (current.dropoffLat - current.pickupLat) * t;
+        lng = current.pickupLng + (current.dropoffLng - current.pickupLng) * t;
+        status = 'IN_PROGRESS';
+      }
 
-      _activeRide = _activeRide!.copyWith(
-        status: progress < 1.0 ? 'IN_PROGRESS' : 'IN_PROGRESS',
-        driverLat: double.parse(currentLat.toStringAsFixed(5)),
-        driverLng: double.parse(currentLng.toStringAsFixed(5)),
+      _activeRide = current.copyWith(
+        status: status,
+        driverLat: double.parse(lat.toStringAsFixed(5)),
+        driverLng: double.parse(lng.toStringAsFixed(5)),
       );
       notifyListeners();
 
-      if (step >= totalSteps) {
-        timer.cancel();
-      }
+      if (step >= approachSteps + tripSteps) timer.cancel();
     });
   }
 
-  /// Triggers or resolves 999 Emergency SOS via both REST and Socket.io
+  /// Triggers or resolves SOS via both REST and Socket.io
   Future<Map<String, dynamic>> triggerEmergencySos({bool resolved = false}) async {
     final rideId = _activeRide?.rideId ?? 'demo';
 
@@ -481,14 +416,11 @@ class PassengerSocketService extends ChangeNotifier {
     if (_activeRide != null) {
       _activeRide = _activeRide!.copyWith(isSosActive: !resolved);
     }
-    _statusBannerBangla = !resolved
-        ? '🚨 জরুরী ৯৯৯ ও কমান্ড সেন্টারে SOS অ্যালার্ট পাঠানো হয়েছে!'
-        : '✓ SOS অ্যালার্ট সমাধান করা হয়েছে।';
     notifyListeners();
     return result;
   }
 
-  /// Completes active ride (for passenger demo verification or cash handover)
+  /// Demo only: completes the active ride on this phone (cash handover).
   void completeActiveRideDemo() {
     if (_activeRide == null) return;
     _demoGpsStreamTimer?.cancel();
@@ -499,19 +431,15 @@ class PassengerSocketService extends ChangeNotifier {
       driverLat: _activeRide!.dropoffLat,
       driverLng: _activeRide!.dropoffLng,
     );
-    _statusBannerBangla =
-        '✅ ভ্রমণ সম্পন্ন হয়েছে! চালককে নগদ ৳$fare পরিশোধ করুন। ধন্যবাদ!';
     notifyListeners();
   }
 
-  /// Cancels or resets the current ride back to idle booking state
+  /// Clears the current ride on this phone (the backend has no cancel event).
   void resetRide() {
     _cancelDemoTimers();
-    _demoGpsStreamTimer?.cancel();
     _activeRide = null;
     _incomingBids.clear();
-    _statusBannerBangla = null;
-    _errorBannerBangla = null;
+    _errorMessage = null;
     notifyListeners();
   }
 
@@ -519,12 +447,13 @@ class PassengerSocketService extends ChangeNotifier {
     _demoBidTimer1?.cancel();
     _demoBidTimer2?.cancel();
     _demoBidTimer3?.cancel();
+    // A new request must not inherit the previous trip's simulated GPS stream.
+    _demoGpsStreamTimer?.cancel();
   }
 
   @override
   void dispose() {
     _cancelDemoTimers();
-    _demoGpsStreamTimer?.cancel();
     _socket?.dispose();
     super.dispose();
   }

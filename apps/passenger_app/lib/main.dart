@@ -1,58 +1,65 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:cholo_ui/cholo_ui.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
-import 'screens/otp_login_screen.dart';
-import 'screens/passenger_home_screen.dart';
+
+import 'app_prefs.dart';
+import 'l10n/app_localizations.dart';
+import 'screens/auth/phone_screen.dart';
+import 'screens/home/home_screen.dart';
 import 'services/passenger_api_service.dart';
 import 'services/passenger_socket_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const CholoBhairabPassengerApp());
+  final prefs = await AppPrefs.load();
+  // Created once here: rebuilding the app (e.g. a language switch) must not create a second
+  // socket, which would lose the backend's ride room membership mid-ride.
+  final api = PassengerApiService();
+  final socket = PassengerSocketService(apiService: api);
+  final saved = prefs.session;
+  if (saved != null) socket.updateSession(saved);
+  runApp(PassengerApp(prefs: prefs, api: api, socket: socket, signedIn: saved != null));
 }
 
-/// Root widget for the CholoBhairab (চলো ভৈরব) Passenger Application.
-/// Wires `MultiProvider` for `PassengerApiService` and `PassengerSocketService`,
-/// applies the Bangladesh Emerald (`#006A4E`) & Deep Command Slate (`#0B131E`) theme,
-/// and launches into the OTP Login & Home flow.
-class CholoBhairabPassengerApp extends StatelessWidget {
-  const CholoBhairabPassengerApp({super.key});
+/// Root of the Cholo Bhairab passenger app.
+class PassengerApp extends StatelessWidget {
+  const PassengerApp({
+    super.key,
+    required this.prefs,
+    required this.api,
+    required this.socket,
+    required this.signedIn,
+  });
+
+  final AppPrefs prefs;
+  final PassengerApiService api;
+  final PassengerSocketService socket;
+  final bool signedIn;
 
   @override
   Widget build(BuildContext context) {
-    final apiService = PassengerApiService();
-
     return MultiProvider(
       providers: [
-        Provider<PassengerApiService>.value(value: apiService),
-        ChangeNotifierProvider<PassengerSocketService>(
-          create: (_) => PassengerSocketService(apiService: apiService),
-        ),
+        ChangeNotifierProvider<AppPrefs>.value(value: prefs),
+        Provider<PassengerApiService>.value(value: api),
+        ChangeNotifierProvider<PassengerSocketService>.value(value: socket),
       ],
-      child: MaterialApp(
-        title: 'চলো ভৈরব (CholoBhairab) — যাত্রী অ্যাপ',
-        debugShowCheckedModeBanner: false,
-        themeMode: ThemeMode.dark,
-        theme: ThemeData(
-          useMaterial3: true,
-          brightness: Brightness.dark,
-          scaffoldBackgroundColor: const Color(0xFF0B131E),
-          colorScheme: ColorScheme.fromSeed(
-            brightness: Brightness.dark,
-            seedColor: const Color(0xFF006A4E),
-            primary: const Color(0xFF006A4E),
-            secondary: const Color(0xFFF59E0B),
-            error: const Color(0xFFF42A41),
-            surface: const Color(0xFF111C2D),
-          ),
-          textTheme: GoogleFonts.hindSiliguriTextTheme(
-            ThemeData.dark().textTheme,
-          ),
-        ),
-        initialRoute: '/login',
-        routes: {
-          '/login': (_) => const OtpLoginScreen(),
-          '/home': (_) => const PassengerHomeScreen(),
+      child: Builder(
+        builder: (context) {
+          final locale = context.select<AppPrefs, Locale>((p) => p.locale);
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+            locale: locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              ...GlobalMaterialLocalizations.delegates,
+            ],
+            theme: cbTheme(bangla: locale.languageCode == 'bn'),
+            themeMode: ThemeMode.light,
+            home: signedIn ? const HomeScreen() : const PhoneScreen(),
+          );
         },
       ),
     );
