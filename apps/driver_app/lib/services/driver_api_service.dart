@@ -6,6 +6,13 @@ import '../models/driver_models.dart';
 const String kApiUrl =
     String.fromEnvironment('API_URL', defaultValue: 'http://localhost:4000');
 
+/// Android applicationId; also the User-Agent that OpenStreetMap's tile servers require.
+const String kAppPackageName = 'com.cholobhairab.cholobhairab_driver';
+
+/// Demo tools (test requests, simulated acceptance, low-balance switch, Nagad).
+/// Build with --dart-define=DEMO_MODE=false for a pilot that must only show real data.
+const bool kDemoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: true);
+
 class WalletFetchResult {
   final DriverWalletModel wallet;
   final List<WalletTransactionModel> transactions;

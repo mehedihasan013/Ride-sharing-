@@ -22,6 +22,9 @@ const _mutedTiles = ColorFilter.matrix(<double>[
   0, 0, 0, 1, 0,
 ]);
 
+/// Straight-line distance in km (no routing service).
+double cbDistanceKm(LatLng a, LatLng b) => const Distance().as(LengthUnit.Meter, a, b) / 1000;
+
 /// A tappable named place shown on the map (Bhairab landmarks, driver stands).
 class CbMapPlace {
   const CbMapPlace({required this.id, required this.point, required this.label});

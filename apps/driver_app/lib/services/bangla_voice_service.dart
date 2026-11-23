@@ -43,8 +43,6 @@ class BanglaVoiceService extends ChangeNotifier {
   bool _isSpeaking = false;
   String? _activePromptBangla;
   Timer? _speechTimer;
-  Timer? _waveformTimer;
-  int _waveformTick = 0;
 
   final List<BanglaVoiceLogEntry> _history = [
     BanglaVoiceLogEntry(
@@ -67,21 +65,8 @@ class BanglaVoiceService extends ChangeNotifier {
   bool get isMuted => _isMuted;
   bool get isSpeaking => _isSpeaking;
   String? get activePromptBangla => _activePromptBangla;
-  int get waveformTick => _waveformTick;
   List<BanglaVoiceLogEntry> get history => List.unmodifiable(_history);
 
-  List<double> get currentWaveformHeights {
-    if (!_isSpeaking || _isMuted) {
-      return const [0.22, 0.30, 0.25, 0.35, 0.28, 0.24, 0.32, 0.20];
-    }
-    const patterns = <List<double>>[
-      [0.35, 0.85, 0.55, 0.95, 0.45, 0.80, 0.60, 0.40],
-      [0.75, 0.40, 0.90, 0.50, 0.95, 0.35, 0.85, 0.65],
-      [0.45, 0.95, 0.35, 0.75, 0.60, 0.90, 0.40, 0.80],
-      [0.85, 0.55, 0.75, 0.40, 0.85, 0.65, 0.95, 0.50],
-    ];
-    return patterns[_waveformTick % patterns.length];
-  }
 
   void toggleMute() {
     _isMuted = !_isMuted;
@@ -91,14 +76,6 @@ class BanglaVoiceService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setMuted(bool value) {
-    if (_isMuted == value) return;
-    _isMuted = value;
-    if (_isMuted && _isSpeaking) {
-      _stopActiveSpeech();
-    }
-    notifyListeners();
-  }
 
   Future<void> speakRideOpportunity(String promptBangla) async {
     final text = promptBangla.trim().isEmpty
@@ -161,11 +138,9 @@ class BanglaVoiceService extends ChangeNotifier {
     }
 
     _speechTimer?.cancel();
-    _waveformTimer?.cancel();
 
     _isSpeaking = true;
     _activePromptBangla = textBangla;
-    _waveformTick = 0;
     notifyListeners();
 
     try {
@@ -175,10 +150,6 @@ class BanglaVoiceService extends ChangeNotifier {
       // Ignore platform channel errors in headless or test environments.
     }
 
-    _waveformTimer = Timer.periodic(const Duration(milliseconds: 180), (_) {
-      _waveformTick++;
-      notifyListeners();
-    });
 
     final durationMs = (textBangla.length * 55).clamp(2600, 5200);
     _speechTimer = Timer(Duration(milliseconds: durationMs), () {
@@ -188,7 +159,6 @@ class BanglaVoiceService extends ChangeNotifier {
 
   void _stopActiveSpeech() {
     _speechTimer?.cancel();
-    _waveformTimer?.cancel();
     _isSpeaking = false;
     _activePromptBangla = null;
     notifyListeners();
@@ -197,7 +167,6 @@ class BanglaVoiceService extends ChangeNotifier {
   @override
   void dispose() {
     _speechTimer?.cancel();
-    _waveformTimer?.cancel();
     super.dispose();
   }
 }

@@ -155,7 +155,8 @@ void main() {
         );
         // pump, not pumpAndSettle: progress bars and the SOS pulse never settle.
         await tester.pump();
-        expect(tester.takeException(), isNull);
+        final error = tester.takeException();
+        expect(error, isNull, reason: error is FlutterError ? error.toStringDeep() : '$error');
         await tester.pumpWidget(const SizedBox());
       });
     }

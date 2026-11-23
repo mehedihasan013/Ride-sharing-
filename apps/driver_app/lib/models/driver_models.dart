@@ -200,6 +200,9 @@ class IncomingRideOpportunity {
   final double pickupLat;
   final double pickupLng;
   final String dropoffAddress;
+  /// Sent by newer backends; older ones omit it (then the app looks the place up by name).
+  final double? dropoffLat;
+  final double? dropoffLng;
   final double initialOfferFare;
   final String audioPromptBangla;
   final int expiresInSeconds;
@@ -212,6 +215,8 @@ class IncomingRideOpportunity {
     required this.pickupLat,
     required this.pickupLng,
     required this.dropoffAddress,
+    this.dropoffLat,
+    this.dropoffLng,
     required this.initialOfferFare,
     required this.audioPromptBangla,
     required this.expiresInSeconds,
@@ -237,6 +242,8 @@ class IncomingRideOpportunity {
       pickupLat: (json['pickupLat'] as num?)?.toDouble() ?? 24.0487,
       pickupLng: (json['pickupLng'] as num?)?.toDouble() ?? 90.9852,
       dropoffAddress: dropoffAddress,
+      dropoffLat: (json['dropoffLat'] as num?)?.toDouble(),
+      dropoffLng: (json['dropoffLng'] as num?)?.toDouble(),
       initialOfferFare: initialOfferFare,
       audioPromptBangla:
           (json['audioPromptBangla'] ?? defaultPrompt).toString(),
@@ -254,6 +261,9 @@ class ActiveDriverTrip {
   final double pickupLat;
   final double pickupLng;
   final String dropoffAddress;
+  /// Sent by newer backends; older ones omit it (then the app looks the place up by name).
+  final double? dropoffLat;
+  final double? dropoffLng;
   final double agreedFare;
   final String messageBangla;
   final DateTime startedAt;
@@ -266,6 +276,8 @@ class ActiveDriverTrip {
     required this.pickupLat,
     required this.pickupLng,
     required this.dropoffAddress,
+    this.dropoffLat,
+    this.dropoffLng,
     required this.agreedFare,
     required this.messageBangla,
     required this.startedAt,
@@ -283,6 +295,8 @@ class ActiveDriverTrip {
       dropoffAddress:
           (json['dropoffAddress'] ?? 'সৈয়দ নজরুল ইসলাম সেতু (মেঘনা ব্রিজ)')
               .toString(),
+      dropoffLat: (json['dropoffLat'] as num?)?.toDouble(),
+      dropoffLng: (json['dropoffLng'] as num?)?.toDouble(),
       agreedFare: (json['agreedFare'] as num?)?.toDouble() ?? 90.0,
       messageBangla: (json['messageBangla'] ??
               'রাইড কনফার্ম হয়েছে! যাত্রীর কাছে রওয়ানা হন।')

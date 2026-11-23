@@ -12,9 +12,9 @@ class DriverSocketService extends ChangeNotifier {
 
   io.Socket? _socket;
   bool _isSocketConnected = false;
-  bool _isOnline = true;
-  String _statusBannerBangla =
-      'আপনি অনলাইন আছেন। নতুন ট্রিপের জন্য অপেক্ষা করুন।';
+
+  /// Drivers start offline and go online on purpose (big "Go online" button).
+  bool _isOnline = false;
   String? _lastErrorBangla;
 
   DriverProfileModel _profile = const DriverProfileModel(
@@ -56,7 +56,7 @@ class DriverSocketService extends ChangeNotifier {
 
   ActiveDriverTrip? _activeTrip;
   CompletedRideSummary? _lastCompletedSummary;
-  int _gpsPingCount = 0;
+  bool _lastWalletWasLive = false;
 
   DriverSocketService({
     required this.apiService,
@@ -69,7 +69,8 @@ class DriverSocketService extends ChangeNotifier {
   // Getters
   bool get isSocketConnected => _isSocketConnected;
   bool get isOnline => _isOnline;
-  String get statusBannerBangla => _statusBannerBangla;
+
+  /// Last server or bid error (Bangla text from the backend); the UI shows its own wording.
   String? get lastErrorBangla => _lastErrorBangla;
   DriverProfileModel get profile => _profile;
   List<BhairabLandmark> get landmarks => _landmarks;
@@ -83,8 +84,9 @@ class DriverSocketService extends ChangeNotifier {
   double? get lastSubmittedBidAmount => _lastSubmittedBidAmount;
   int? get lastSubmittedEtaMinutes => _lastSubmittedEtaMinutes;
   ActiveDriverTrip? get activeTrip => _activeTrip;
-  CompletedRideSummary? get lastCompletedSummary => _lastCompletedSummary;
-  int get gpsPingCount => _gpsPingCount;
+
+  /// False when the wallet shown is the offline demo fallback.
+  bool get walletIsLive => _lastWalletWasLive;
 
   Future<void> _initialize() async {
     await Future.wait([
@@ -92,12 +94,6 @@ class DriverSocketService extends ChangeNotifier {
       refreshWallet(),
     ]);
     connectSocket();
-    // Seed an initial incoming ride opportunity if none arrives within 1.5s so the UI is immediately interactive
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (_currentOpportunity == null && _activeTrip == null && _isOnline) {
-        simulateIncomingOpportunity(speakAloud: false);
-      }
-    });
   }
 
   Future<void> refreshLandmarks() async {
@@ -119,10 +115,7 @@ class DriverSocketService extends ChangeNotifier {
     );
     _wallet = result.wallet;
     _transactions = result.transactions;
-    if (_wallet.isLockedOut) {
-      _lastErrorBangla =
-          '🔒 আপনার ব্যালেন্স ৫০ টাকার নিচে! বিড করতে বিকাশ রিচার্জ করুন';
-    }
+    _lastWalletWasLive = result.isLiveBackend;
     notifyListeners();
   }
 
@@ -157,45 +150,28 @@ class DriverSocketService extends ChangeNotifier {
         notifyListeners();
       });
 
-      socket.on('driver:online_confirmed', (data) {
-        if (data is Map) {
-          final msg = data['messageBangla']?.toString();
-          if (msg != null && msg.isNotEmpty) {
-            _statusBannerBangla = msg;
-            notifyListeners();
-          }
-        }
-      });
-
       socket.on('driver:ride_opportunity', (data) {
-        if (!_isOnline) return;
+        if (!_isOnline || _activeTrip != null) return;
         if (data is Map) {
-          final mapData = Map<String, dynamic>.from(data);
-          final opp = IncomingRideOpportunity.fromJson(mapData);
+          final opp = IncomingRideOpportunity.fromJson(Map<String, dynamic>.from(data));
           _handleNewOpportunity(opp, speakAloud: true);
         }
       });
 
       socket.on('driver:bid_submitted', (data) {
         _hasSubmittedBid = true;
-        _statusBannerBangla =
-            'আপনার বিড (৳${(_lastSubmittedBidAmount ?? 80).toStringAsFixed(0)}) যাত্রীর কাছে পাঠানো হয়েছে...';
         notifyListeners();
       });
 
       socket.on('driver:bid_won', (data) {
         if (data is Map) {
-          final mapData = Map<String, dynamic>.from(data);
-          final trip = ActiveDriverTrip.fromJson(mapData);
-          _handleBidWon(trip);
+          _handleBidWon(ActiveDriverTrip.fromJson(Map<String, dynamic>.from(data)));
         }
       });
 
       socket.on('driver:ride_summary', (data) {
         if (data is Map) {
-          final mapData = Map<String, dynamic>.from(data);
-          final summary = CompletedRideSummary.fromJson(mapData);
-          _handleRideSummary(summary);
+          _handleRideSummary(CompletedRideSummary.fromJson(Map<String, dynamic>.from(data)));
         }
       });
 
@@ -217,17 +193,14 @@ class DriverSocketService extends ChangeNotifier {
     }
   }
 
+  /// shortcut: the backend has no driver:go_offline event, so it still lists the driver as online;
+  /// add the event when the gateway supports it.
   void toggleOnlineStatus(bool value) {
     _isOnline = value;
     if (_isOnline) {
-      _statusBannerBangla =
-          'আপনি অনলাইন আছেন। নতুন ট্রিপের জন্য অপেক্ষা করুন।';
       emitGoOnline();
     } else {
-      _statusBannerBangla =
-          'আপনি এখন অফলাইন আছেন। নতুন ট্রিপ পেতে অনলাইনে যান।';
-      _countdownTimer?.cancel();
-      _currentOpportunity = null;
+      dismissOpportunity();
     }
     notifyListeners();
   }
@@ -259,16 +232,14 @@ class DriverSocketService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void emitUpdateLocation({double? customLat, double? customLng}) {
-    final jitterLat = customLat ??
-        (_profile.lat + ((_gpsPingCount % 2 == 0 ? 1 : -1) * 0.0004));
-    final jitterLng = customLng ??
-        (_profile.lng + ((_gpsPingCount % 2 == 0 ? 1 : -1) * 0.0005));
-    _gpsPingCount++;
-
+  /// Sends the driver's position. During a trip the backend relays it to the passenger, whose app
+  /// then shows "On your trip", so only call it once the trip has started.
+  /// shortcut: position is the chosen stand plus a small jitter (no GPS yet); add geolocator for real tracking.
+  void emitUpdateLocation() {
+    final jitter = DateTime.now().second.isEven ? 1 : -1;
     _profile = _profile.copyWith(
-      lat: double.parse(jitterLat.toStringAsFixed(5)),
-      lng: double.parse(jitterLng.toStringAsFixed(5)),
+      lat: double.parse((_selectedLandmark.latitude + jitter * 0.0004).toStringAsFixed(5)),
+      lng: double.parse((_selectedLandmark.longitude + jitter * 0.0005).toStringAsFixed(5)),
     );
 
     if (_socket != null && _isSocketConnected) {
@@ -302,16 +273,26 @@ class DriverSocketService extends ChangeNotifier {
       if (_opportunityRemainingSeconds <= 1) {
         timer.cancel();
         _opportunityRemainingSeconds = 0;
-        notifyListeners();
+        // Unanswered requests close themselves; a sent offer stays visible until the passenger decides.
+        if (!_hasSubmittedBid) _currentOpportunity = null;
       } else {
         _opportunityRemainingSeconds--;
-        notifyListeners();
       }
+      notifyListeners();
     });
 
     notifyListeners();
   }
 
+  /// Closes the current request on this phone (the backend has no "ignore" event).
+  void dismissOpportunity() {
+    _countdownTimer?.cancel();
+    _currentOpportunity = null;
+    _hasSubmittedBid = false;
+    notifyListeners();
+  }
+
+  /// Demo: a request as if a passenger near the railway junction had booked.
   void simulateIncomingOpportunity({bool speakAloud = true}) {
     final opp = IncomingRideOpportunity(
       rideId: 'ride_bhairab_${DateTime.now().millisecondsSinceEpoch}',
@@ -320,6 +301,8 @@ class DriverSocketService extends ChangeNotifier {
       pickupLat: 24.0487,
       pickupLng: 90.9852,
       dropoffAddress: 'সৈয়দ নজরুল ইসলাম সেতু (মেঘনা ব্রিজ গোলচত্বর)',
+      dropoffLat: 24.0418,
+      dropoffLng: 91.0022,
       initialOfferFare: 80.0,
       audioPromptBangla:
           'নতুন ট্রিপ রিকোয়েস্ট: ভৈরব বাজার রেলওয়ে জংশন থেকে মেঘনা ব্রিজ, প্রস্তাবিত ভাড়া ৮০ টাকা',
@@ -337,8 +320,9 @@ class DriverSocketService extends ChangeNotifier {
     if (opp == null) return;
 
     if (_wallet.isLockedOut) {
+      // Kept even though the UI disables bidding: the voice warning, and the server's own check.
       _lastErrorBangla =
-          '🔒 কম ব্যালেন্স! বিড করতে নূন্যতম ৫০ টাকা ওয়ালেট ব্যালেন্স প্রয়োজন। বিকাশ রিচার্জ করুন।';
+          'কম ব্যালেন্স! বিড করতে নূন্যতম ৫০ টাকা ওয়ালেট ব্যালেন্স প্রয়োজন। বিকাশ রিচার্জ করুন।';
       voiceService.speakLowBalanceWarning();
       if (_socket != null && _isSocketConnected) {
         _socket!.emit('driver:submit_bid', {
@@ -356,8 +340,6 @@ class DriverSocketService extends ChangeNotifier {
     _hasSubmittedBid = true;
     _lastSubmittedBidAmount = bidAmount;
     _lastSubmittedEtaMinutes = etaMinutes;
-    _statusBannerBangla =
-        'বিড পাঠানো হয়েছে: ৳${bidAmount.toStringAsFixed(0)} (সম্ভাব্য সময়: $etaMinutes মিনিট)';
 
     if (_socket != null && _isSocketConnected) {
       _socket!.emit('driver:submit_bid', {
@@ -370,11 +352,10 @@ class DriverSocketService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Allows instant testing of bid win when passenger accepts or in standalone demo mode
+  /// Demo: the passenger accepts this driver's offer.
   void simulatePassengerAcceptsBid() {
     final opp = _currentOpportunity;
-    final agreed =
-        _lastSubmittedBidAmount ?? opp?.initialOfferFare ?? 80.0;
+    final agreed = _lastSubmittedBidAmount ?? opp?.initialOfferFare ?? 80.0;
     final trip = ActiveDriverTrip(
       rideId: opp?.rideId ?? 'ride_bhairab_active',
       passengerName: opp?.passengerName ?? 'আব্দুল করিম (Karim)',
@@ -382,8 +363,9 @@ class DriverSocketService extends ChangeNotifier {
       pickupAddress: opp?.pickupAddress ?? 'ভৈরব বাজার রেলওয়ে জংশন',
       pickupLat: opp?.pickupLat ?? 24.0487,
       pickupLng: opp?.pickupLng ?? 90.9852,
-      dropoffAddress:
-          opp?.dropoffAddress ?? 'সৈয়দ নজরুল ইসলাম সেতু (মেঘনা ব্রিজ)',
+      dropoffAddress: opp?.dropoffAddress ?? 'সৈয়দ নজরুল ইসলাম সেতু (মেঘনা ব্রিজ)',
+      dropoffLat: opp?.dropoffLat,
+      dropoffLng: opp?.dropoffLng,
       agreedFare: agreed,
       messageBangla: 'রাইড কনফার্ম হয়েছে! যাত্রীর কাছে রওয়ানা হন।',
       startedAt: DateTime.now(),
@@ -396,7 +378,6 @@ class DriverSocketService extends ChangeNotifier {
     _currentOpportunity = null;
     _hasSubmittedBid = false;
     _activeTrip = trip;
-    _statusBannerBangla = trip.messageBangla;
     voiceService.speakRideConfirmed(trip.messageBangla);
     notifyListeners();
   }
@@ -456,17 +437,13 @@ class DriverSocketService extends ChangeNotifier {
       ),
     );
 
-    _statusBannerBangla = summary.messageBangla;
     voiceService.speakSystemMessage(summary.messageBangla);
-
-    if (_wallet.isLockedOut) {
-      _lastErrorBangla =
-          '🔒 আপনার ব্যালেন্স ৫০ টাকার নিচে! পরবর্তী বিড করতে বিকাশ রিচার্জ করুন';
-    }
-
     notifyListeners();
   }
 
+  /// Legacy top-up used by the Nagad demo path.
+  /// shortcut: POST /wallet/topup/bkash needs the admin key, so outside demo mode this only
+  /// credits locally; keep Nagad demo-only until a driver-facing Nagad API exists.
   Future<WalletTransactionModel> topupWallet({
     required double amountBdt,
     String method = 'BKASH',
@@ -483,15 +460,10 @@ class DriverSocketService extends ChangeNotifier {
       lastTopupAt: DateTime.now(),
     );
     _transactions.insert(0, tx);
-
-    if (!_wallet.isLockedOut) {
-      _lastErrorBangla = null;
-    }
+    if (!_wallet.isLockedOut) _lastErrorBangla = null;
 
     // Re-sync online driver wallet balance with backend socket
-    if (_isOnline) {
-      emitGoOnline();
-    }
+    if (_isOnline) emitGoOnline();
 
     voiceService.speakSystemMessage(tx.noteBangla);
     notifyListeners();
@@ -505,7 +477,7 @@ class DriverSocketService extends ChangeNotifier {
     return apiService.createBkashTokenizedPayment(_profile.driverId, amountBdt);
   }
 
-  /// Step 3 of bKash Tokenized Checkout: Execute Payment & Credit Ledger (`POST /payments/bkash/execute`)
+  /// Step 2 of bKash Tokenized Checkout: Execute Payment & Credit Ledger (`POST /payments/bkash/execute`)
   Future<BkashExecutePaymentResult> executeBkashTokenizedPayment({
     required String paymentID,
     required double amountBdt,
@@ -524,36 +496,26 @@ class DriverSocketService extends ChangeNotifier {
       lastTopupAt: DateTime.now(),
     );
     _transactions.insert(0, result.transaction);
+    if (!_wallet.isLockedOut) _lastErrorBangla = null;
 
-    if (!_wallet.isLockedOut) {
-      _lastErrorBangla = null;
-    }
-
-    if (_isOnline) {
-      emitGoOnline();
-    }
+    if (_isOnline) emitGoOnline();
 
     voiceService.speakSystemMessage(result.transaction.noteBangla);
     notifyListeners();
     return result;
   }
 
-  /// Switch between standard funded profile (193 BDT) and low-balance demo (35 BDT)
+  /// Demo: switch between the funded driver (৳193) and a low-balance driver (৳35).
   Future<void> toggleLowBalanceDemoMode() async {
-    if (_wallet.currentBalance >= 50.0) {
+    if (_wallet.currentBalance >= DriverWalletModel.minimumBidBalanceBdt) {
       _profile = _profile.copyWith(
         driverId: 'driver_demo_4',
-        driverName: 'আনোয়ার মিয়া (Low Balance Demo)',
+        driverName: 'আনোয়ার মিয়া',
         driverPhone: '01611223304',
         vehicleType: 'EASYBIKE',
         vehicleModel: 'বোরাক ইজিবাইক ভৈরব #০৮',
       );
-      _wallet = _wallet.copyWith(
-        driverId: 'driver_demo_4',
-        currentBalance: 35.0,
-      );
-      _lastErrorBangla =
-          '🔒 আপনার ব্যালেন্স ৫০ টাকার নিচে! বিড করতে বিকাশ রিচার্জ করুন';
+      _wallet = _wallet.copyWith(driverId: 'driver_demo_4', currentBalance: 35.0);
       voiceService.speakLowBalanceWarning();
     } else {
       _profile = _profile.copyWith(
@@ -563,15 +525,10 @@ class DriverSocketService extends ChangeNotifier {
         vehicleType: 'EASYBIKE',
         vehicleModel: 'ভৈরব ইজিবাইক (টমটম) #১২',
       );
-      _wallet = _wallet.copyWith(
-        driverId: 'driver_demo_1',
-        currentBalance: 193.0,
-      );
+      _wallet = _wallet.copyWith(driverId: 'driver_demo_1', currentBalance: 193.0);
       _lastErrorBangla = null;
     }
-    if (_isOnline) {
-      emitGoOnline();
-    }
+    if (_isOnline) emitGoOnline();
     notifyListeners();
   }
 
@@ -606,9 +563,7 @@ class DriverSocketService extends ChangeNotifier {
       kycStatus: result.status,
     );
 
-    if (_isOnline) {
-      emitGoOnline();
-    }
+    if (_isOnline) emitGoOnline();
     voiceService.speakSystemMessage(result.messageBangla);
     notifyListeners();
     return result;
