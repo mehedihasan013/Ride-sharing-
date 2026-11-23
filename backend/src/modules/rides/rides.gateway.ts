@@ -202,6 +202,8 @@ export class RidesGateway implements OnGatewayConnection, OnGatewayDisconnect {
         pickupLat: ride.pickupLat,
         pickupLng: ride.pickupLng,
         dropoffAddress: ride.dropoffAddress,
+        dropoffLat: ride.dropoffLat,
+        dropoffLng: ride.dropoffLng,
         initialOfferFare: ride.initialOfferFare,
         audioPromptBangla,
         expiresInSeconds: 60,
@@ -279,6 +281,8 @@ export class RidesGateway implements OnGatewayConnection, OnGatewayDisconnect {
         pickupLat: ride.pickupLat,
         pickupLng: ride.pickupLng,
         dropoffAddress: ride.dropoffAddress,
+        dropoffLat: ride.dropoffLat,
+        dropoffLng: ride.dropoffLng,
         agreedFare: acceptedBid.bidAmount,
         messageBangla: 'রাইড কনফার্ম হয়েছে! যাত্রীর কাছে রওয়ানা হন।',
       });
