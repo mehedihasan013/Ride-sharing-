@@ -236,6 +236,9 @@ class AppLocalizationsBn extends AppLocalizations {
   String get tripConfirmNo => 'এখনো না';
 
   @override
+  String get tripCancelledByPassenger => 'যাত্রী রাইড বাতিল করেছেন';
+
+  @override
   String get sumTitle => 'ট্রিপ শেষ · নগদ নিন';
 
   @override

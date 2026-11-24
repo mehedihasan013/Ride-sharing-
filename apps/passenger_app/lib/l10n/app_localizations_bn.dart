@@ -277,8 +277,10 @@ class AppLocalizationsBn extends AppLocalizations {
   String get tripCancelTitle => 'রাইড বাতিল করবেন?';
 
   @override
-  String get tripCancelBody =>
-      'চালক নিজে থেকে জানবেন না। বাতিলের আগে চালককে ফোন করে জানান।';
+  String get tripCancelBody => 'চালককে জানিয়ে দেওয়া হবে।';
+
+  @override
+  String get tripArrived => 'চালক পৌঁছেছেন';
 
   @override
   String get tripCancelConfirm => 'হ্যাঁ, বাতিল করুন';

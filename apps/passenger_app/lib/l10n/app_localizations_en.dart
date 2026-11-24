@@ -278,8 +278,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripCancelTitle => 'Cancel this ride?';
 
   @override
-  String get tripCancelBody =>
-      'Your driver won\'t be told automatically. Call them before you cancel.';
+  String get tripCancelBody => 'Your driver will be told.';
+
+  @override
+  String get tripArrived => 'Your driver has arrived';
 
   @override
   String get tripCancelConfirm => 'Yes, cancel';

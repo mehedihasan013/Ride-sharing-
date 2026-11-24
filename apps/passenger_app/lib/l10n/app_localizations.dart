@@ -558,8 +558,14 @@ abstract class AppLocalizations {
   /// No description provided for @tripCancelBody.
   ///
   /// In bn, this message translates to:
-  /// **'চালক নিজে থেকে জানবেন না। বাতিলের আগে চালককে ফোন করে জানান।'**
+  /// **'চালককে জানিয়ে দেওয়া হবে।'**
   String get tripCancelBody;
+
+  /// No description provided for @tripArrived.
+  ///
+  /// In bn, this message translates to:
+  /// **'চালক পৌঁছেছেন'**
+  String get tripArrived;
 
   /// No description provided for @tripCancelConfirm.
   ///

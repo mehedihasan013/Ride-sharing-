@@ -95,6 +95,15 @@ final Map<String, Widget> _panels = {
     onCancel: () {},
     onRaise: () {},
   ),
+  'trip arrived': TripSheet(
+    ride: _ride.copyWith(status: 'ARRIVING'),
+    pickupName: _pickup.banglaName,
+    dropoffName: _longPlace.banglaName,
+    onCall: () {},
+    onShare: () {},
+    onSafety: () {},
+    onCancel: () {},
+  ),
   'trip': TripSheet(
     ride: _ride,
     pickupName: _pickup.banglaName,

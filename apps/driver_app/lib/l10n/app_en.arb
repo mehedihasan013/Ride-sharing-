@@ -71,6 +71,7 @@
   "tripConfirmTitle": "Collected {fare} in cash?",
   "tripConfirmYes": "Yes, collected",
   "tripConfirmNo": "Not yet",
+  "tripCancelledByPassenger": "The passenger cancelled the ride",
 
   "sumTitle": "Trip complete · collect cash",
   "sumFare": "Fare (cash)",

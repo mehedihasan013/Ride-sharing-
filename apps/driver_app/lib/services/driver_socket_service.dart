@@ -55,6 +55,7 @@ class DriverSocketService extends ChangeNotifier {
   int? _lastSubmittedEtaMinutes;
 
   ActiveDriverTrip? _activeTrip;
+  String? _lastCancelledRideId;
   CompletedRideSummary? _lastCompletedSummary;
   bool _lastWalletWasLive = false;
 
@@ -84,6 +85,9 @@ class DriverSocketService extends ChangeNotifier {
   double? get lastSubmittedBidAmount => _lastSubmittedBidAmount;
   int? get lastSubmittedEtaMinutes => _lastSubmittedEtaMinutes;
   ActiveDriverTrip? get activeTrip => _activeTrip;
+
+  /// Set when the passenger cancels the trip in progress; the UI shows a message once.
+  String? get lastCancelledRideId => _lastCancelledRideId;
 
   /// False when the wallet shown is the offline demo fallback.
   bool get walletIsLive => _lastWalletWasLive;
@@ -169,6 +173,22 @@ class DriverSocketService extends ChangeNotifier {
         }
       });
 
+      // The passenger cancelled: close the request or the trip it belongs to.
+      socket.on('driver:ride_cancelled', (data) {
+        final rideId = data is Map ? data['rideId']?.toString() : null;
+        if (rideId == null) return;
+        if (_activeTrip?.rideId == rideId) {
+          _activeTrip = null;
+          _lastCancelledRideId = rideId;
+        }
+        if (_currentOpportunity?.rideId == rideId) {
+          _countdownTimer?.cancel();
+          _currentOpportunity = null;
+          _hasSubmittedBid = false;
+        }
+        notifyListeners();
+      });
+
       socket.on('driver:ride_summary', (data) {
         if (data is Map) {
           _handleRideSummary(CompletedRideSummary.fromJson(Map<String, dynamic>.from(data)));
@@ -193,16 +213,27 @@ class DriverSocketService extends ChangeNotifier {
     }
   }
 
-  /// shortcut: the backend has no driver:go_offline event, so it still lists the driver as online;
-  /// add the event when the gateway supports it.
   void toggleOnlineStatus(bool value) {
     _isOnline = value;
     if (_isOnline) {
       emitGoOnline();
     } else {
+      _socket?.emit('driver:go_offline', {'driverId': _profile.driverId});
       dismissOpportunity();
     }
     notifyListeners();
+  }
+
+  /// Tells the passenger the driver is at the pickup.
+  void markArrived() => _emitTripStep('driver:arrived');
+
+  /// Tells the passenger the trip has started.
+  void startTrip() => _emitTripStep('driver:start_trip');
+
+  void _emitTripStep(String event) {
+    final trip = _activeTrip;
+    if (trip == null || _socket == null || !_isSocketConnected) return;
+    _socket!.emit(event, {'rideId': trip.rideId, 'driverId': _profile.driverId});
   }
 
   void emitGoOnline() {

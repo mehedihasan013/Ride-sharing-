@@ -35,7 +35,11 @@ class TripSheet extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final driver = ride.assignedDriver;
     final fare = ride.agreedFare ?? ride.initialOfferFare;
-    final coming = ride.status == 'ACCEPTED';
+    final (title, dotColor) = switch (ride.status) {
+      'ACCEPTED' => (l.tripDriverComing('${driver?.etaMinutes ?? 2}'), CbColors.warning),
+      'ARRIVING' => (l.tripArrived, CbColors.brand),
+      _ => (l.tripOnTrip, CbColors.brand),
+    };
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -43,14 +47,9 @@ class TripSheet extends StatelessWidget {
       children: [
         Row(
           children: [
-            StatusDot(color: coming ? CbColors.warning : CbColors.brand, size: 10),
+            StatusDot(color: dotColor, size: 10),
             const SizedBox(width: CbSpace.s),
-            Expanded(
-              child: Text(
-                coming ? l.tripDriverComing('${driver?.etaMinutes ?? 2}') : l.tripOnTrip,
-                style: text.titleMedium,
-              ),
-            ),
+            Expanded(child: Text(title, style: text.titleMedium)),
           ],
         ),
         const SizedBox(height: CbSpace.m),

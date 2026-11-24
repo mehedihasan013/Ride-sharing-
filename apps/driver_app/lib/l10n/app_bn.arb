@@ -86,6 +86,7 @@
   "@tripConfirmTitle": {"placeholders": {"fare": {"type": "String"}}},
   "tripConfirmYes": "হ্যাঁ, পেয়েছি",
   "tripConfirmNo": "এখনো না",
+  "tripCancelledByPassenger": "যাত্রী রাইড বাতিল করেছেন",
 
   "sumTitle": "ট্রিপ শেষ · নগদ নিন",
   "sumFare": "ভাড়া (নগদ)",

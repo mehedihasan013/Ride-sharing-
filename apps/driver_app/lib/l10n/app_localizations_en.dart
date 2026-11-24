@@ -236,6 +236,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripConfirmNo => 'Not yet';
 
   @override
+  String get tripCancelledByPassenger => 'The passenger cancelled the ride';
+
+  @override
   String get sumTitle => 'Trip complete · collect cash';
 
   @override

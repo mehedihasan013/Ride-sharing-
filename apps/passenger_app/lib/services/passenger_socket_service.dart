@@ -148,6 +148,10 @@ class PassengerSocketService extends ChangeNotifier {
         }
       });
 
+      // Driver reached the pickup / started the trip (newer backends).
+      socket.on('ride:driver_arrived', (_) => _setStatus('ARRIVING'));
+      socket.on('ride:started', (_) => _setStatus('IN_PROGRESS'));
+
       // 4. Listen to ride:driver_location (the real driver started the trip)
       socket.on('ride:driver_location', (data) {
         if (data is Map && _activeRide != null) {
@@ -207,6 +211,22 @@ class PassengerSocketService extends ChangeNotifier {
       _activeRide = _activeRide!.copyWith(status: 'BIDDING');
     }
     notifyListeners();
+  }
+
+  void _setStatus(String status) {
+    final ride = _activeRide;
+    if (ride == null || ride.status == 'COMPLETED') return;
+    _activeRide = ride.copyWith(status: status);
+    notifyListeners();
+  }
+
+  /// Cancels the ride on the server (the driver is told) and clears it on this phone.
+  void cancelRide() {
+    final ride = _activeRide;
+    if (ride != null && _isConnected && _socket != null) {
+      _socket!.emit('rider:cancel_ride', {'rideId': ride.rideId});
+    }
+    resetRide();
   }
 
   /// Hides an offer on this phone (the backend has no decline event).
@@ -355,13 +375,15 @@ class PassengerSocketService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Demo only: the driver drives to the pickup (ACCEPTED), then to the drop-off (IN_PROGRESS).
+  /// Demo only: the driver drives to the pickup (ACCEPTED), waits there (ARRIVING), then drives
+  /// to the drop-off (IN_PROGRESS).
   void _startSimulatedGpsTelemetryIfIdle() {
     _demoGpsStreamTimer?.cancel();
     final ride = _activeRide;
     if (!kDemoMode || ride == null) return;
 
     const approachSteps = 4;
+    const waitSteps = 2;
     const tripSteps = 25;
     final startLat = ride.driverLat ?? ride.pickupLat;
     final startLng = ride.driverLng ?? ride.pickupLng;
@@ -381,9 +403,13 @@ class PassengerSocketService extends ChangeNotifier {
         final t = step / approachSteps;
         lat = startLat + (current.pickupLat - startLat) * t;
         lng = startLng + (current.pickupLng - startLng) * t;
-        status = 'ACCEPTED';
+        status = step == approachSteps ? 'ARRIVING' : 'ACCEPTED';
+      } else if (step <= approachSteps + waitSteps) {
+        lat = current.pickupLat;
+        lng = current.pickupLng;
+        status = 'ARRIVING';
       } else {
-        final t = ((step - approachSteps) / tripSteps).clamp(0.0, 1.0);
+        final t = ((step - approachSteps - waitSteps) / tripSteps).clamp(0.0, 1.0);
         lat = current.pickupLat + (current.dropoffLat - current.pickupLat) * t;
         lng = current.pickupLng + (current.dropoffLng - current.pickupLng) * t;
         status = 'IN_PROGRESS';
@@ -396,7 +422,7 @@ class PassengerSocketService extends ChangeNotifier {
       );
       notifyListeners();
 
-      if (step >= approachSteps + tripSteps) timer.cancel();
+      if (step >= approachSteps + waitSteps + tripSteps) timer.cancel();
     });
   }
 

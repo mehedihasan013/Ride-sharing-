@@ -488,6 +488,12 @@ abstract class AppLocalizations {
   /// **'এখনো না'**
   String get tripConfirmNo;
 
+  /// No description provided for @tripCancelledByPassenger.
+  ///
+  /// In bn, this message translates to:
+  /// **'যাত্রী রাইড বাতিল করেছেন'**
+  String get tripCancelledByPassenger;
+
   /// No description provided for @sumTitle.
   ///
   /// In bn, this message translates to:

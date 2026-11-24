@@ -28,6 +28,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   TripStep _step = TripStep.goToPickup;
   String? _stepRideId;
+  String? _shownCancelId;
 
   DriverSocketService get _socket => context.read<DriverSocketService>();
 
@@ -80,9 +81,11 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (_step) {
       case TripStep.goToPickup:
         setState(() => _step = TripStep.waitForPassenger);
+        _socket.markArrived();
       case TripStep.waitForPassenger:
         setState(() => _step = TripStep.driveToDropoff);
-        // The backend relays this to the passenger, whose app then shows "On your trip".
+        _socket.startTrip();
+        // Also share the position so the passenger's map moves.
         _socket.emitUpdateLocation();
       case TripStep.driveToDropoff:
         await _complete(trip);
@@ -121,6 +124,15 @@ class _HomeScreenState extends State<HomeScreen> {
       (s) => (s.isOnline, s.isSocketConnected, s.wallet, s.profile, s.activeTrip, s.landmarks, s.selectedLandmark),
     );
     final muted = context.select<BanglaVoiceService, bool>((v) => v.isMuted);
+    final cancelledId = context.select<DriverSocketService, String?>((s) => s.lastCancelledRideId);
+    if (cancelledId != null && cancelledId != _shownCancelId) {
+      _shownCancelId = cancelledId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l.tripCancelledByPassenger)));
+        }
+      });
+    }
 
     if (trip != null && trip.rideId != _stepRideId) {
       _stepRideId = trip.rideId;

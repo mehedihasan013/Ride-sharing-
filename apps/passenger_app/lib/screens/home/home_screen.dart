@@ -186,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
       driver?.driverPhone ?? '',
       pickupName,
       dropoffName,
-      '${_api.baseUrl}/rides/track/${ride.liveTrackingToken}',
+      '${_api.baseUrl}/rides/live/${ride.liveTrackingToken}',
     );
     Clipboard.setData(ClipboardData(text: message));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l.tripShareCopied)));
@@ -232,7 +232,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-    if (cancel == true) _socket.resetRide();
+    if (cancel == true) _socket.cancelRide();
   }
 
   void _finishTrip() {
@@ -379,7 +379,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onSortChanged: (value) => setState(() => _sortByEta = value),
             onAccept: _socket.acceptBid,
             onDecline: (bid) => _socket.declineBid(bid.bidId),
-            onCancel: _socket.resetRide,
+            onCancel: _socket.cancelRide,
             onRaise: () => _raise(ride),
           ),
         );
