@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { GeoService } from '../geo/geo.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -474,7 +475,8 @@ export class RidesService {
     initialOfferFare: number;
   }): ActiveRide {
     const rideId = `ride_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const liveTrackingToken = `track_${Math.random().toString(36).substr(2, 9)}`;
+    // Unguessable: the token alone opens the public live-tracking page.
+    const liveTrackingToken = `track_${randomBytes(12).toString('hex')}`;
     const audioPromptBangla = `নতুন ট্রিপ রিকোয়েস্ট: ${data.pickupAddress} থেকে ${data.dropoffAddress}, প্রস্তাবিত ভাড়া ${data.initialOfferFare} টাকা`;
 
     const ride: ActiveRide = {
@@ -557,6 +559,51 @@ export class RidesService {
 
     this.persistToStore();
     return { ride, acceptedBid: bid };
+  }
+
+  /** Passenger cancels before the trip starts. */
+  cancelRide(rideId: string): ActiveRide {
+    const ride = this.activeRides.get(rideId);
+    if (!ride) throw new NotFoundException('Ride not found');
+    if (!['SEARCHING', 'BIDDING', 'ACCEPTED', 'ARRIVING'].includes(ride.status)) {
+      throw new BadRequestException('Ride can no longer be cancelled');
+    }
+    ride.status = 'CANCELLED';
+    this.persistToStore();
+    return ride;
+  }
+
+  /** Only the driver who won the ride can mark arrival. */
+  markDriverArrived(rideId: string, driverId: string): ActiveRide {
+    const ride = this.requireAssignedRide(rideId, driverId);
+    if (ride.status !== 'ACCEPTED') throw new BadRequestException('Ride is not waiting for the driver');
+    ride.status = 'ARRIVING';
+    this.persistToStore();
+    return ride;
+  }
+
+  /** Only the driver who won the ride can start it. */
+  startTrip(rideId: string, driverId: string): ActiveRide {
+    const ride = this.requireAssignedRide(rideId, driverId);
+    if (ride.status !== 'ACCEPTED' && ride.status !== 'ARRIVING') {
+      throw new BadRequestException('Ride cannot be started now');
+    }
+    ride.status = 'IN_PROGRESS';
+    this.persistToStore();
+    return ride;
+  }
+
+  private requireAssignedRide(rideId: string, driverId: string): ActiveRide {
+    const ride = this.activeRides.get(rideId);
+    if (!ride) throw new NotFoundException('Ride not found');
+    if (ride.selectedDriverId !== driverId) throw new BadRequestException('Not your ride');
+    return ride;
+  }
+
+  /** Last known position of an online driver (for the public tracking page). */
+  getDriverPosition(driverId?: string): { lat: number; lng: number } | undefined {
+    const driver = driverId ? this.onlineDrivers.get(driverId) : undefined;
+    return driver ? { lat: driver.lat, lng: driver.lng } : undefined;
   }
 
   async completeRide(rideId: string): Promise<{ ride: ActiveRide; commissionDeducted: number }> {

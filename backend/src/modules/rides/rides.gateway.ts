@@ -346,6 +346,76 @@ export class RidesGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
+   * Passenger cancels. Only the socket that requested the ride (it joined `ride:<id>`) may cancel.
+   * shortcut: room membership stands in for auth until JWT checks land (pre-launch item 9).
+   */
+  @SubscribeMessage('rider:cancel_ride')
+  handleCancelRide(@ConnectedSocket() client: Socket, @MessageBody() data: { rideId: string }) {
+    if (!client.rooms.has(`ride:${data?.rideId}`)) {
+      client.emit('rider:error', { message: 'Not your ride' });
+      return;
+    }
+    try {
+      const ride = this.ridesService.cancelRide(data.rideId);
+      this.server.to(`ride:${ride.id}`).emit('ride:cancelled', { rideId: ride.id });
+      // The assigned driver, or every driver who bid while it was still open.
+      const driverIds = ride.selectedDriverId ? [ride.selectedDriverId] : ride.bids.map((b) => b.driverId);
+      for (const driverId of new Set(driverIds)) {
+        this.server.to(`driver:${driverId}`).emit('driver:ride_cancelled', { rideId: ride.id });
+      }
+      this.broadcastAdminEvent('RIDE_CANCELLED', {
+        rideId: ride.id,
+        ride,
+        messageBangla: `যাত্রী রাইড বাতিল করেছেন (${ride.passengerName})`,
+      });
+    } catch (err: any) {
+      client.emit('rider:error', { message: err.message });
+    }
+  }
+
+  /** Driver goes offline: stop sending requests. Only the socket that went online as this driver. */
+  @SubscribeMessage('driver:go_offline')
+  handleDriverOffline(@ConnectedSocket() client: Socket, @MessageBody() data: { driverId: string }) {
+    if (!client.rooms.has(`driver:${data?.driverId}`)) return;
+    const vehicleType = this.ridesService.getAllOnlineDrivers().find((d) => d.driverId === data.driverId)?.vehicleType;
+    this.ridesService.removeOnlineDriver(data.driverId);
+    client.leave(`driver:${data.driverId}`);
+    if (vehicleType) client.leave(`vehicle:${vehicleType}`);
+    this.broadcastAdminEvent('DRIVER_OFFLINE', { driverId: data.driverId });
+  }
+
+  /** Driver reached the pickup. */
+  @SubscribeMessage('driver:arrived')
+  handleDriverArrived(@ConnectedSocket() client: Socket, @MessageBody() data: { rideId: string; driverId: string }) {
+    this.driverRideStep(client, data, 'arrived');
+  }
+
+  /** Driver started the trip with the passenger on board. */
+  @SubscribeMessage('driver:start_trip')
+  handleStartTrip(@ConnectedSocket() client: Socket, @MessageBody() data: { rideId: string; driverId: string }) {
+    this.driverRideStep(client, data, 'started');
+  }
+
+  private driverRideStep(client: Socket, data: { rideId: string; driverId: string }, step: 'arrived' | 'started') {
+    if (!client.rooms.has(`driver:${data?.driverId}`)) {
+      client.emit('driver:error', { message: 'Not signed in as this driver' });
+      return;
+    }
+    try {
+      const ride =
+        step === 'arrived'
+          ? this.ridesService.markDriverArrived(data.rideId, data.driverId)
+          : this.ridesService.startTrip(data.rideId, data.driverId);
+      this.server
+        .to(`ride:${ride.id}`)
+        .emit(step === 'arrived' ? 'ride:driver_arrived' : 'ride:started', { rideId: ride.id });
+      this.broadcastAdminEvent(step === 'arrived' ? 'DRIVER_ARRIVED' : 'TRIP_STARTED', { rideId: ride.id, ride });
+    } catch (err: any) {
+      client.emit('driver:error', { message: err.message });
+    }
+  }
+
+  /**
    * Emergency 999 SOS triggered via Socket
    */
   @SubscribeMessage('ride:sos')

@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, NotFoundException, Header } from '@nestjs/common';
 import { RidesService } from './rides.service';
 import { RidesGateway } from './rides.gateway';
+import { renderTrackingPage } from './tracking-page';
 
 @Controller('rides')
 export class RidesController {
@@ -34,6 +35,23 @@ export class RidesController {
       success: true,
       ride,
     };
+  }
+
+  /** Public live-tracking page for the link passengers share with family. */
+  @Get('live/:token')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  getLiveTrackingPage(@Param('token') token: string) {
+    const ride = this.ridesService.getRideByTrackingToken(token);
+    if (!ride) throw new NotFoundException('Invalid or expired tracking link');
+    return renderTrackingPage({
+      status: ride.status,
+      driverName: ride.selectedDriverName,
+      vehicleModel: ride.selectedVehicleModel,
+      pickupAddress: ride.pickupAddress,
+      dropoffAddress: ride.dropoffAddress,
+      fare: ride.finalAgreedFare,
+      driverPosition: this.ridesService.getDriverPosition(ride.selectedDriverId),
+    });
   }
 
   @Get('track/:token')
